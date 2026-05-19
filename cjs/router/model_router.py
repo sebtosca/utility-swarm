@@ -280,16 +280,15 @@ class ModelRouter:
         }
 
     def _write_escalation(self, *, node: str, from_model: str, to_model: str) -> None:
-        path = self._run_folder / "escalations.jsonl"
-        entry = {
-            "ts": datetime.now(timezone.utc).isoformat(),
-            "type": "model_fallback",
-            "run_id": self.run_id,
-            "node": node,
-            "from_model": from_model,
-            "to_model": to_model,
-            "reason": "circuit_open",
-        }
-        with open(path, "a") as f:
-            f.write(json.dumps(entry) + "\n")
+        from cjs.escalation.events import write_escalation_event
+        write_escalation_event(
+            self._run_folder / "escalations.jsonl",
+            type="model_fallback",
+            run_id=self.run_id,
+            node=node,
+            from_model=from_model,
+            to_model=to_model,
+            reason="circuit_open",
+        )
+        logger.warning("model_fallback", from_model=from_model, to_model=to_model, node=node)
         logger.warning("model_fallback", from_model=from_model, to_model=to_model, node=node)
