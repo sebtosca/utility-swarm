@@ -768,16 +768,11 @@ def run(
             typer.secho(f"Jury swarm failed: {exc}", err=True, fg=typer.colors.RED)
         raise typer.Exit(1)
 
-    if final_state.get("verdict"):
-        verdict_path = run_folder / "results"
-        verdict_path.mkdir(exist_ok=True)
-        (verdict_path / "verdict.json").write_text(_json.dumps(final_state["verdict"], indent=2))
-        if not json_mode:
-            typer.secho(
-                f"Winner: {final_state['verdict']['winner_video']}", fg=typer.colors.GREEN
-            )
+    from cjs.auction.engine import run_auction
+    auction_verdict = run_auction(final_state, run_folder)
 
     if not json_mode:
+        typer.secho(f"Winner: {auction_verdict['winner_video']}", fg=typer.colors.GREEN)
         typer.secho("Run complete.", fg=typer.colors.GREEN)
 
     if json_mode:
@@ -786,8 +781,9 @@ def run(
                 "status": "ok",
                 "run_id": run_id,
                 "run_folder": str(run_folder),
-                "winner": final_state.get("verdict", {}).get("winner_video"),
+                "winner": auction_verdict["winner_video"],
                 "verdict": str(run_folder / "results" / "verdict.json"),
+                "scorecards": str(run_folder / "results" / "scorecards.json"),
             },
             json_mode=True,
         )
@@ -1001,21 +997,19 @@ def resume(
             typer.secho(f"Resume failed: {exc}", err=True, fg=typer.colors.RED)
         raise typer.Exit(1)
 
-    if final_state and final_state.get("verdict"):
-        verdict_path = run_folder / "results"
-        verdict_path.mkdir(exist_ok=True)
-        (verdict_path / "verdict.json").write_text(_json.dumps(final_state["verdict"], indent=2))
+    from cjs.auction.engine import run_auction
+    auction_verdict = run_auction(final_state, run_folder) if final_state else {}
 
     if json_output:
         output_result(
             {
                 "ok": True, "run_id": run_id,
-                "winner": (final_state or {}).get("verdict", {}).get("winner_video"),
+                "winner": auction_verdict.get("winner_video"),
             },
             json_mode=True,
         )
     else:
-        winner = (final_state or {}).get("verdict", {}).get("winner_video", "unknown")
+        winner = auction_verdict.get("winner_video", "unknown")
         typer.secho(f"Run {run_id} complete. Winner: {winner}", fg=typer.colors.GREEN)
 
 
