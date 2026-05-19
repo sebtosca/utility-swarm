@@ -319,7 +319,11 @@ def test_run_json_output_shape(monkeypatch, tmp_path: Path) -> None:
         "flags_resolved": [],
     }
     mock_compiled = MagicMock()
-    mock_compiled.invoke.return_value = {"verdict": _fake_verdict}
+    mock_compiled.invoke.return_value = {
+        "verdict": _fake_verdict,
+        "rubric": {"weights": {"brief_compliance": 1.0}},
+        "final_judgements": {},
+    }
     mock_graph = MagicMock()
     mock_graph.compile.return_value = mock_compiled
     monkeypatch.setattr("cjs.graph.jury_graph.build_jury_graph", lambda: mock_graph)
@@ -437,7 +441,11 @@ def test_run_non_json_prints_pipeline_and_placeholder(monkeypatch, tmp_path: Pat
         "flags_resolved": [],
     }
     mock_compiled = MagicMock()
-    mock_compiled.invoke.return_value = {"verdict": _fake_verdict}
+    mock_compiled.invoke.return_value = {
+        "verdict": _fake_verdict,
+        "rubric": {"weights": {"brief_compliance": 1.0}},
+        "final_judgements": {},
+    }
     mock_graph = MagicMock()
     mock_graph.compile.return_value = mock_compiled
     monkeypatch.setattr("cjs.graph.jury_graph.build_jury_graph", lambda: mock_graph)
