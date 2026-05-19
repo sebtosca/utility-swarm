@@ -9,7 +9,7 @@ from pathlib import Path
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from cjs.config import Settings, ModelsConfig, AuthConfig, LimitsConfig, RunConfig
+from cjs.config import Settings, ModelSettings, AuthSettings, LimitSettings, RunSettings
 from cjs.graph.jury_graph import build_jury_graph
 from cjs.graph.state import JuryState
 from cjs.router.model_router import ModelRouter
@@ -20,18 +20,17 @@ from cjs.schemas.verdict import Verdict
 def test_full_jury_swarm_produces_verdict():
     """Full graph with live API — two minimal video dossiers, verify verdict produced."""
     config = Settings(
-        models=ModelsConfig(
+        models=ModelSettings(
             text="claude-haiku-4-5-20251001",
             vision="claude-haiku-4-5-20251001",
             extended_thinking="claude-haiku-4-5-20251001",
         ),
-        auth=AuthConfig(api_key_env="ANTHROPIC_API_KEY"),
-        limits=LimitsConfig(
+        auth=AuthSettings(api_key_env="ANTHROPIC_API_KEY"),
+        limits=LimitSettings(
             max_videos=2, max_duration_sec=60, max_frames=6,
             max_pdf_pages=10,
         ),
-        run=RunConfig(out_dir="~/.cjs/runs"),
-        langsmith=None,
+        run=RunSettings(out_dir="~/.cjs/runs"),
     )
 
     with tempfile.TemporaryDirectory() as tmpdir:
