@@ -12,6 +12,8 @@ from cjs.graph.nodes.scoring import (
 from cjs.graph.nodes.consistency import consistency_checker_node
 from cjs.graph.nodes.deliberation import deliberation_round_node
 from cjs.graph.nodes.moderator import moderator_node
+from cjs.escalation.human_review import human_review_gate_node
+from cjs.escalation.confidence_gate import confidence_gate_node
 
 _AGENT_NODES = [
     "creative_strategist_node",
@@ -36,13 +38,17 @@ def build_jury_graph() -> StateGraph:
     graph.add_node("storytelling_critic_node", storytelling_critic_node)
     graph.add_node("consistency_checker_node", consistency_checker_node)
     graph.add_node("deliberation_round_node", deliberation_round_node)
+    graph.add_node("human_review_gate_node", human_review_gate_node)
     graph.add_node("moderator_node", moderator_node)
+    graph.add_node("confidence_gate_node", confidence_gate_node)
 
     graph.add_conditional_edges(START, _fan_out)
     for name in _AGENT_NODES:
         graph.add_edge(name, "consistency_checker_node")
     graph.add_edge("consistency_checker_node", "deliberation_round_node")
-    graph.add_edge("deliberation_round_node", "moderator_node")
-    graph.add_edge("moderator_node", END)
+    graph.add_edge("deliberation_round_node", "human_review_gate_node")
+    graph.add_edge("human_review_gate_node", "moderator_node")
+    graph.add_edge("moderator_node", "confidence_gate_node")
+    graph.add_edge("confidence_gate_node", END)
 
     return graph

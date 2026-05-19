@@ -610,6 +610,11 @@ def run(
         file_okay=False,
         dir_okay=True,
     ),
+    strict_confidence: bool = typer.Option(
+        False,
+        "--strict-confidence",
+        help="Exit with error if verdict confidence is below 70%.",
+    ),
 ) -> None:
     """Run the jury pipeline: brief + videos → winner + report."""
     json_mode = is_json_mode(ctx)
@@ -734,10 +739,28 @@ def run(
     checkpoints_db = run_folder / "checkpoints.db"
     saver = SqliteSaver.from_conn_string(str(checkpoints_db))
     compiled = build_jury_graph().compile(checkpointer=saver)
-    thread_config = {"configurable": {"thread_id": run_id, "router": router}}
+    thread_config = {"configurable": {"thread_id": run_id, "router": router, "strict_confidence": strict_confidence}}
 
+    from cjs.escalation.human_review import HumanReviewRejectedError
+    from cjs.escalation.confidence_gate import LowConfidenceError
     try:
         final_state = compiled.invoke(initial_jury_state, config=thread_config)
+    except HumanReviewRejectedError:
+        if json_mode:
+            output_result({"status": "paused", "run_id": run_id,
+                           "reason": "human_review_rejected"}, json_mode=True)
+        else:
+            typer.secho(
+                f"Run paused at human review gate. Resume with: cjs resume {run_id}",
+                fg=typer.colors.YELLOW,
+            )
+        raise typer.Exit(0)
+    except LowConfidenceError as exc:
+        if json_mode:
+            output_result({"status": "error", "run_id": run_id, "error": str(exc)}, json_mode=True)
+        else:
+            typer.secho(str(exc), err=True, fg=typer.colors.RED)
+        raise typer.Exit(1)
     except Exception as exc:
         if json_mode:
             output_result({"status": "error", "run_id": run_id, "error": str(exc)}, json_mode=True)
@@ -912,6 +935,11 @@ def audit(
 def resume(
     run_id: str = typer.Argument(..., help="Run ID to resume (the folder name under runs/)."),
     json_output: bool = typer.Option(False, "--json", help="Output result as JSON."),
+    strict_confidence: bool = typer.Option(
+        False,
+        "--strict-confidence",
+        help="Exit with error if verdict confidence is below 70%.",
+    ),
 ) -> None:
     """Resume a run from its last LangGraph checkpoint."""
     import json as _json
@@ -941,13 +969,31 @@ def resume(
     router = ModelRouter(run_id=run_id, run_folder=run_folder, config=config)
     saver = SqliteSaver.from_conn_string(str(checkpoints_db))
     compiled = build_jury_graph().compile(checkpointer=saver)
-    thread_config = {"configurable": {"thread_id": run_id, "router": router}}
+    thread_config = {"configurable": {"thread_id": run_id, "router": router, "strict_confidence": strict_confidence}}
 
     if not json_output:
         typer.echo(f"Resuming run {run_id}...")
 
+    from cjs.escalation.human_review import HumanReviewRejectedError
+    from cjs.escalation.confidence_gate import LowConfidenceError
     try:
         final_state = compiled.invoke(None, config=thread_config)
+    except HumanReviewRejectedError:
+        if json_output:
+            output_result({"ok": False, "status": "paused", "run_id": run_id,
+                           "reason": "human_review_rejected"}, json_mode=True)
+        else:
+            typer.secho(
+                f"Run paused at human review gate. Resume again with: cjs resume {run_id}",
+                fg=typer.colors.YELLOW,
+            )
+        raise typer.Exit(0)
+    except LowConfidenceError as exc:
+        if json_output:
+            output_result({"ok": False, "error": str(exc), "run_id": run_id}, json_mode=True)
+        else:
+            typer.secho(str(exc), err=True, fg=typer.colors.RED)
+        raise typer.Exit(1)
     except Exception as exc:
         if json_output:
             output_result({"ok": False, "error": str(exc), "run_id": run_id}, json_mode=True)

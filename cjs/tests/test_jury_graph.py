@@ -57,8 +57,16 @@ def _mock_deliberation(state, config):
     return {"final_judgements": {name: [{**FAKE_JUDGEMENT, "agent_name": name}] for name in AGENT_NAMES}}
 
 
+def _mock_human_review_gate(state, config):
+    return {}
+
+
 def _mock_moderator(state, config):
     return {"verdict": FAKE_VERDICT}
+
+
+def _mock_confidence_gate(state, config):
+    return {}
 
 
 def _build_mock_graph():
@@ -68,13 +76,17 @@ def _build_mock_graph():
         graph.add_node(f"{name}_node", _make_mock_agent(name))
     graph.add_node("consistency_checker_node", _mock_consistency)
     graph.add_node("deliberation_round_node", _mock_deliberation)
+    graph.add_node("human_review_gate_node", _mock_human_review_gate)
     graph.add_node("moderator_node", _mock_moderator)
+    graph.add_node("confidence_gate_node", _mock_confidence_gate)
     graph.add_conditional_edges(START, _fan_out)
     for name in AGENT_NAMES:
         graph.add_edge(f"{name}_node", "consistency_checker_node")
     graph.add_edge("consistency_checker_node", "deliberation_round_node")
-    graph.add_edge("deliberation_round_node", "moderator_node")
-    graph.add_edge("moderator_node", END)
+    graph.add_edge("deliberation_round_node", "human_review_gate_node")
+    graph.add_edge("human_review_gate_node", "moderator_node")
+    graph.add_edge("moderator_node", "confidence_gate_node")
+    graph.add_edge("confidence_gate_node", END)
     return graph
 
 
