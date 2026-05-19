@@ -36,10 +36,10 @@ _BASE_STATE = {
 }
 
 
-def _make_config(tmp_path: Path):
+def _make_config(tmp_path: Path, auto_approve: bool = False):
     router = mock.MagicMock()
     router._run_folder = tmp_path
-    return {"configurable": {"thread_id": "t", "router": router}}
+    return {"configurable": {"thread_id": "t", "router": router, "auto_approve": auto_approve}}
 
 
 def test_compute_max_score_delta_returns_zero_with_no_scores():
@@ -95,3 +95,21 @@ def test_gate_rejected_raises(tmp_path):
          mock.patch("rich.console.Console"):
         with pytest.raises(HumanReviewRejectedError):
             human_review_gate_node(_BASE_STATE, _make_config(tmp_path))
+
+
+def test_gate_auto_approve_skips_prompt(tmp_path):
+    with mock.patch("cjs.escalation.human_review.typer.confirm") as mock_confirm, \
+         mock.patch("rich.console.Console"):
+        result = human_review_gate_node(_BASE_STATE, _make_config(tmp_path, auto_approve=True))
+    mock_confirm.assert_not_called()
+    assert result == {}
+
+
+def test_gate_auto_approve_writes_approved_event(tmp_path):
+    with mock.patch("cjs.escalation.human_review.typer.confirm"), \
+         mock.patch("rich.console.Console"):
+        human_review_gate_node(_BASE_STATE, _make_config(tmp_path, auto_approve=True))
+    import json
+    events = [json.loads(l) for l in (tmp_path / "escalations.jsonl").read_text().splitlines() if l]
+    types = [e["type"] for e in events]
+    assert "human_review_approved" in types

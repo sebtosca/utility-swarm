@@ -22,7 +22,7 @@ Phases 1–6 are complete. Phases 7 onward follow the production build plan (`do
 - [x] **7.2** Each call injects `run_id` via `extra_headers={"X-Run-ID": run_id}` and returns `RouterResult(content, tokens_in, tokens_out, latency_ms, model)`.
 - [x] **7.3** Wrap every call with `tenacity` retry: 3 attempts, exponential backoff (2s, 4s, 8s), retry on `anthropic.APIError`.
 - [x] **7.4** Add circuit breaker: track consecutive failures per model; after 3, fall back to `claude-haiku-4-5-20251001`; write a fallback event to `runs/<run_id>/escalations.jsonl`.
-- [ ] **7.5** Write unit tests for retry logic and fallback behaviour (mock the Anthropic client).
+- [x] **7.5** Write unit tests for retry logic and fallback behaviour (mock the Anthropic client).
 
 ---
 
@@ -60,69 +60,57 @@ Phases 1–6 are complete. Phases 7 onward follow the production build plan (`do
 
 ## Phase 11: LangGraph Jury Swarm
 
-- [ ] **11.1** Create `cjs/graph/state.py`: `JuryState` TypedDict with all fields from the architecture plan.
-- [ ] **11.2** Create `cjs/agents/base_agent.py`: `BaseJuryAgent(persona, router)` with `score(state, video_index) -> AgentScorecard`.
-- [ ] **11.3** Create one file per jury agent (fixed persona + dynamic rubric injection):
-  - `cjs/agents/creative_strategist.py`
-  - `cjs/agents/brand_compliance.py` (extended thinking)
-  - `cjs/agents/audience_psychology.py`
-  - `cjs/agents/performance_marketer.py`
-  - `cjs/agents/storytelling_critic.py`
-  - `cjs/agents/moderator.py` (extended thinking; writes `VerdictJSON`)
-  - `cjs/agents/consistency_checker.py` (fast call; writes `ConsistencyFlag` list)
-- [ ] **11.4** Create `cjs/graph/jury_graph.py`: build LangGraph graph with `SqliteSaver` checkpointing stored at `runs/<run_id>/checkpoints.db`. Graph nodes: `BriefNode → VideoAnalysisNode → fan-out[5 parallel JuryAgentNodes] → ConsistencyCheckerNode → DeliberationRound → ModeratorNode → ReportGeneratorNode`.
-- [ ] **11.5** In `cjs run`: compile graph with `SqliteSaver(checkpoints_db_path)`, invoke with `thread_id=run_id`.
-- [ ] **11.6** Add `cjs resume <run_id>` CLI command: load `checkpoints.db`, re-invoke graph from last checkpoint.
+- [x] **11.1** Create `cjs/graph/state.py`: `JuryState` TypedDict with all fields from the architecture plan.
+- [x] **11.2** Agent logic lives in `cjs/graph/nodes/` (scoring, consistency, deliberation, moderator nodes).
+- [x] **11.3** All five scoring agents, consistency checker, and moderator implemented as LangGraph nodes in `cjs/graph/nodes/`.
+- [x] **11.4** Create `cjs/graph/jury_graph.py`: full 9-node LangGraph with `SqliteSaver` checkpointing.
+- [x] **11.5** In `cjs run`: compile graph with `SqliteSaver`, invoke with `thread_id=run_id`.
+- [x] **11.6** Add `cjs resume <run_id>` CLI command.
 
 ---
 
 ## Phase 12: Escalation System
 
-- [ ] **12.1** Create `cjs/escalation/human_review.py`. After `ConsistencyCheckerNode`: if `max_score_delta > 3.0` OR unresolved flags remain after deliberation — emit event to `escalations.jsonl`, print Rich panel, prompt `Continue anyway? [y/N]`. If `N`, save state and exit cleanly for `cjs resume`.
-- [ ] **12.2** Create `cjs/escalation/confidence_gate.py`. After `ModeratorNode`: if `verdict.confidence < 0.70` — write `"verdict_confidence": "low"` to `metrics.json`, emit event to `escalations.jsonl`. Add `--strict-confidence` CLI flag to make gate blocking instead of advisory.
-- [ ] **12.3** Model fallback events (Phase 7.4) write to the same `escalations.jsonl` schema: `{ts, type, run_id, trace_id, node, ...}`.
+- [x] **12.1** Create `cjs/escalation/human_review.py`. Gate node + `--auto-approve` flag.
+- [x] **12.2** Create `cjs/escalation/confidence_gate.py`. `--strict-confidence` flag on `cjs run`/`resume`.
+- [x] **12.3** Model fallback events write to the same `escalations.jsonl` schema.
 
 ---
 
 ## Phase 13: Auction Engine
 
-- [ ] **13.1** Create `cjs/auction/engine.py`: `compute_final_scores(state) -> dict[video, float]` using the formula: `Σ_agents(rubric_weighted_score × confidence × conviction_weight) − risk_penalty`. Pure Python, no LLM.
-- [ ] **13.2** Add `select_winner(scores) -> str` and `build_verdict(scores, state) -> VerdictJSON`.
-- [ ] **13.3** Write `results/scorecards.json` and `results/verdict.json`.
-- [ ] **13.4** Write unit tests covering: weighted aggregation, conviction normalisation, risk penalty, edge case ties.
+- [x] **13.1** Create `cjs/auction/engine.py`: `compute_final_scores(state) -> dict[video, float]`.
+- [x] **13.2** Add `select_winner(scores) -> str` and `build_verdict(scores, state) -> VerdictJSON`.
+- [x] **13.3** Write `results/scorecards.json` and `results/verdict.json`.
+- [x] **13.4** Unit tests: 13 tests covering all formula cases.
 
 ---
 
 ## Phase 14: HTML Report
 
-- [ ] **14.1** Create `cjs/report/template.html`: self-contained, all JS/CSS inline (no external CDN). Sections: header (run_id, trace_id, winner), radar charts (Chart.js), bar chart, score timeline, D3 debate graph, extended thinking expander, consistency flags panel, escalation events panel, low-confidence banner (conditional).
-- [ ] **14.2** Create `cjs/report/builder.py`: `build_report(run_folder, state, verdict, metrics) -> Path`. Reads all run artifacts, embeds as `<script>window.CJS_DATA = {...}</script>`, writes `results/report.html`.
-- [ ] **14.3** In `cjs run`: after auction, call `build_report`; auto-open `report.html` in browser with `webbrowser.open`.
-- [ ] **14.4** Verify report is fully self-contained (open without internet, no 404s in DevTools).
+- [x] **14.1** Create `cjs/report/template.html`: self-contained, all JS/CSS inline (no external CDN). Sections: header (run_id, trace_id, winner), radar charts (Chart.js), bar chart, score timeline, D3 debate graph, extended thinking expander, consistency flags panel, escalation events panel, low-confidence banner (conditional).
+- [x] **14.2** Create `cjs/report/builder.py`: `build_report(run_folder, state, verdict, metrics) -> Path`. Reads all run artifacts, embeds as `<script>window.CJS_DATA = {...}</script>`, writes `results/report.html`.
+- [x] **14.3** In `cjs run`: after auction, call `build_report`; auto-open `report.html` in browser with `webbrowser.open`.
+- [x] **14.4** Verify report is fully self-contained (open without internet, no 404s in DevTools).
 
 ---
 
 ## Phase 15: LangSmith Integration
 
-- [ ] **15.1** Set `LANGCHAIN_TRACING_V2=true`, `LANGCHAIN_PROJECT=creative-jury-swarm` in Docker compose and `.env.example`.
-- [ ] **15.2** Add run metadata tags to LangSmith trace: `run_id`, `video_count`, `winner`, `verdict_confidence`.
-- [ ] **15.3** Capture LangSmith run URL after invocation; write to `metrics.json` as `langsmith_url`.
+- [x] **15.1** Set `LANGCHAIN_TRACING_V2=true`, `LANGCHAIN_PROJECT=creative-jury-swarm` in `.env.example`.
+- [x] **15.2** Add run metadata tags to LangSmith trace: `cjs_run_id`, `video_count`, `creative-jury-swarm` tag.
+- [x] **15.3** Capture LangSmith run URL after invocation; write to `metrics.json` as `langsmith_url`.
 
 ---
 
 ## Phase 16: Packaging & Portfolio
 
-- [ ] **16.1** Create `Dockerfile`: multi-stage build, non-root user, `ffmpeg` installed, `pip install -e .`.
-- [ ] **16.2** Create `docker-compose.yml`: services `jaeger` (all-in-one, ports 16686 + 4317) and `app` (mounts `./runs`, passes `ANTHROPIC_API_KEY` + `OTEL_EXPORTER_OTLP_ENDPOINT`).
-- [ ] **16.3** Create `.github/workflows/ci.yml`: jobs `lint` (ruff), `typecheck` (mypy), `test` (pytest), `docker-build` — all parallel, triggered on push and PR.
-- [ ] **16.4** Rewrite `README.md`:
-  - Mermaid LangGraph diagram (auto-renders on GitHub)
-  - "Production Engineering Features" section: OTel, circuit breaker, human-in-the-loop, checkpointing, audit trail
-  - "Observability Stack" diagram: LangSmith + Jaeger + structlog
-  - Quick-start: `docker compose up`, `cjs configure`, `cjs run ...`
-  - Screenshot of HTML report and terminal output
-- [ ] **16.5** Add `config_snapshot.yaml` written to each run folder at the start of `cjs run`.
-- [ ] **16.6** Add `SECURITY.md` and `.env.example`.
+- [x] **16.1** Create `Dockerfile`: multi-stage build, non-root user, `ffmpeg` installed, `pip install -e .`.
+- [x] **16.2** Create `docker-compose.yml`: services `jaeger` (all-in-one, ports 16686 + 4317) and `app` (mounts `./runs`, passes `ANTHROPIC_API_KEY` + `OTEL_EXPORTER_OTLP_ENDPOINT`).
+- [x] **16.3** Create `.github/workflows/ci.yml`: jobs `lint` (ruff), `typecheck` (mypy), `test` (pytest), `docker-build` — all parallel, triggered on push and PR.
+- [x] **16.4** Rewrite `README.md`: Mermaid LangGraph diagram, Production Engineering Features table, Observability Stack diagram, Docker quick-start.
+- [x] **16.5** Add `config_snapshot.yaml` written to each run folder at the start of `cjs run`.
+- [x] **16.6** `SECURITY.md` and `.env.example` already exist; `langsmith` added to `pyproject.toml` dependencies.
 
 ---
 
@@ -150,8 +138,8 @@ Phases 1–6 are complete. Phases 7 onward follow the production build plan (`do
 
 ### Remaining CLI items
 
-- [ ] `cjs resume <run_id>` — resume from LangGraph checkpoint (Phase 11.6).
-- [ ] `cjs audit <run_id>` — pretty-print `audit.jsonl` as Rich table (Phase 8.8).
-- [ ] Run UI: staged Rich progress panels per pipeline node.
-- [ ] `--strict-confidence` flag on `cjs run` (Phase 12.2).
-- [ ] `--auto-approve` flag on `cjs run` to skip human-in-the-loop prompt (Phase 12.1).
+- [x] `cjs resume <run_id>` — resume from LangGraph checkpoint (Phase 11.6).
+- [x] `cjs audit <run_id>` — pretty-print `audit.jsonl` as Rich table (Phase 8.8).
+- [x] Run UI: staged Rich progress panels per pipeline node.
+- [x] `--strict-confidence` flag on `cjs run` (Phase 12.2).
+- [x] `--auto-approve` flag on `cjs run` to skip human-in-the-loop prompt (Phase 12.1).

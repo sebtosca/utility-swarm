@@ -291,4 +291,3 @@ class ModelRouter:
             reason="circuit_open",
         )
         logger.warning("model_fallback", from_model=from_model, to_model=to_model, node=node)
-        logger.warning("model_fallback", from_model=from_model, to_model=to_model, node=node)

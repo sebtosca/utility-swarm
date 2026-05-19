@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Creative Jury Swarm — Verdict</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f1117; --surface: #1a1d2e; --surface2: #252840;
+  --accent: #7c6af7; --accent2: #4ecdc4; --warn: #f7b731; --danger: #fc5c65;
+  --text: #e8eaf0; --muted: #8b8fa8; --border: #2e3150;
+  --green: #26de81; --blue: #45aaf2; --orange: #fd9644;
+  --agent-colors: #7c6af7,#4ecdc4,#f7b731,#fc5c65,#26de81;
+}
+body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.6; }
+a { color: var(--accent); }
+h1 { font-size: 1.6rem; font-weight: 700; }
+h2 { font-size: 1.1rem; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 1rem; }
+h3 { font-size: .95rem; font-weight: 600; color: var(--text); margin-bottom: .5rem; }
+
+.header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1.2rem 2rem; display: flex; align-items: center; gap: 2rem; flex-wrap: wrap; }
+.header-brand { font-size: 1rem; color: var(--muted); font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
+.header-meta { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-left: auto; }
+.meta-item { display: flex; flex-direction: column; }
+.meta-label { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.meta-value { font-size: .95rem; font-weight: 600; }
+
+.winner-banner { background: linear-gradient(135deg, #1a2a1a 0%, #1a2630 100%); border: 1px solid var(--green); border-radius: 10px; padding: 1.4rem 2rem; margin: 1.5rem 2rem; display: flex; align-items: center; gap: 1.5rem; }
+.winner-crown { font-size: 2.2rem; }
+.winner-label { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+.winner-name { font-size: 1.5rem; font-weight: 700; color: var(--green); }
+.winner-rationale { font-size: .88rem; color: var(--muted); max-width: 600px; }
+
+.low-conf-banner { background: #2a1a00; border: 1px solid var(--warn); border-radius: 8px; padding: .9rem 1.4rem; margin: 0 2rem 1rem; display: flex; align-items: center; gap: .8rem; color: var(--warn); font-size: .88rem; }
+
+.main { padding: 0 2rem 3rem; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.4rem; }
+.full-width { grid-column: 1 / -1; }
+
+/* Score bar chart */
+.score-bar-row { display: flex; align-items: center; gap .8rem; margin-bottom: .6rem; }
+.score-bar-label { width: 100px; font-size: .85rem; color: var(--muted); text-align: right; padding-right: .6rem; flex-shrink: 0; }
+.score-bar-track { flex: 1; background: var(--surface2); border-radius: 4px; height: 22px; position: relative; overflow: hidden; }
+.score-bar-fill { height: 100%; border-radius: 4px; transition: width .4s; display: flex; align-items: center; padding-left: .5rem; }
+.score-bar-val { font-size: .78rem; font-weight: 700; color: #fff; }
+
+/* Timeline table */
+.timeline-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.timeline-table th { text-align: left; padding: .4rem .6rem; color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 500; }
+.timeline-table td { padding: .4rem .6rem; border-bottom: 1px solid var(--border); }
+.delta-pos { color: var(--green); font-weight: 600; }
+.delta-neg { color: var(--danger); font-weight: 600; }
+.delta-neu { color: var(--muted); }
+
+/* Flags */
+.flag-item { background: var(--surface2); border-left: 3px solid var(--danger); border-radius: 4px; padding: .7rem 1rem; margin-bottom: .6rem; font-size: .85rem; }
+.flag-type { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--danger); font-weight: 600; margin-bottom: .2rem; }
+
+/* Escalations */
+.esc-item { background: var(--surface2); border-left: 3px solid var(--warn); border-radius: 4px; padding: .7rem 1rem; margin-bottom: .5rem; font-size: .82rem; }
+.esc-type { font-size: .7rem; text-transform: uppercase; color: var(--warn); font-weight: 600; letter-spacing: .06em; }
+.esc-ts { font-size: .72rem; color: var(--muted); float: right; }
+
+/* Thinking expanders */
+details { margin-bottom: .6rem; background: var(--surface2); border-radius: 6px; overflow: hidden; }
+summary { padding: .7rem 1rem; cursor: pointer; font-size: .85rem; font-weight: 500; user-select: none; list-style: none; display: flex; align-items: center; gap: .5rem; }
+summary::before { content: '▶'; font-size: .6rem; color: var(--accent); transition: transform .2s; }
+details[open] summary::before { transform: rotate(90deg); }
+.thinking-body { padding: .8rem 1rem; border-top: 1px solid var(--border); font-size: .82rem; color: var(--muted); white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
+
+/* Ranking table */
+.rank-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.rank-table th { text-align: left; padding: .5rem .8rem; color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 500; font-size: .75rem; text-transform: uppercase; }
+.rank-table td { padding: .5rem .8rem; border-bottom: 1px solid var(--border); }
+.rank-1 { color: var(--green); font-weight: 700; }
+.rank-badge { display: inline-block; width: 22px; height: 22px; border-radius: 50%; background: var(--surface2); text-align: center; line-height: 22px; font-size: .75rem; font-weight: 700; margin-right: .4rem; }
+.rank-badge-1 { background: var(--green); color: #000; }
+
+/* Radar SVG */
+.radar-wrap { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; }
+.radar-item { display: flex; flex-direction: column; align-items: center; }
+.radar-title { font-size: .78rem; color: var(--muted); margin-top: .4rem; }
+
+/* Legend */
+.legend { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: .8rem; }
+.legend-item { display: flex; align-items: center; gap: .35rem; font-size: .78rem; color: var(--muted); }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+.empty-state { color: var(--muted); font-size: .85rem; text-align: center; padding: 1.5rem; }
+</style>
+</head>
+<body>
+<script>
+window.CJS_DATA = __CJS_DATA_PLACEHOLDER__;
+</script>
+<script>
+(function () {
+'use strict';
+
+const D = window.CJS_DATA;
+const AGENT_COLORS = ['#7c6af7','#4ecdc4','#f7b731','#fc5c65','#26de81','#45aaf2','#fd9644'];
+const CONF_THRESHOLD = 0.70;
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+function el(tag, attrs, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'class') e.className = v;
+    else if (k === 'html') e.innerHTML = v;
+    else e.setAttribute(k, v);
+  }
+  children.flat().forEach(c => typeof c === 'string' ? e.append(c) : e.appendChild(c));
+  return e;
+}
+function svgEl(tag, attrs) {
+  const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+  return e;
+}
+function fmt(n) { return typeof n === 'number' ? n.toFixed(2) : '—'; }
+function pct(n) { return typeof n === 'number' ? (n * 100).toFixed(0) + '%' : '—'; }
+
+// Collect all unique video filenames
+function videoNames() {
+  const names = new Set();
+  Object.values(D.final_judgements || {}).forEach(js => js.forEach(j => names.add(j.video_path.split('/').pop())));
+  return [...names].sort();
+}
+
+// Collect rubric dimensions
+function rubricDims() { return Object.keys((D.rubric || {}).weights || {}); }
+
+// Score for agent+video from a judgements dict
+function agentVideoScores(judgements, agentName, videoName) {
+  const js = (judgements[agentName] || []).find(j => j.video_path.endsWith(videoName));
+  return js ? js.scores || {} : null;
+}
+
+// ── radar chart (SVG) ────────────────────────────────────────────────────────
+function drawRadar(dims, agentDataList, size) {
+  size = size || 160;
+  const cx = size / 2, cy = size / 2, r = size * 0.38, padTop = 20;
+  const n = dims.length;
+  const svg = svgEl('svg', {width: size, height: size + padTop, viewBox: `0 0 ${size} ${size + padTop}`});
+
+  // grid rings
+  [0.25, 0.5, 0.75, 1.0].forEach(f => {
+    const ring = svgEl('polygon', {
+      points: dims.map((_, i) => {
+        const a = (i / n) * 2 * Math.PI - Math.PI / 2;
+        return `${cx + r * f * Math.cos(a)},${cy + padTop + r * f * Math.sin(a)}`;
+      }).join(' '),
+      fill: 'none', stroke: '#2e3150', 'stroke-width': '1',
+    });
+    svg.appendChild(ring);
+  });
+
+  // axes + labels
+  dims.forEach((dim, i) => {
+    const a = (i / n) * 2 * Math.PI - Math.PI / 2;
+    const x1 = cx, y1 = cy + padTop;
+    const x2 = cx + r * Math.cos(a), y2 = cy + padTop + r * Math.sin(a);
+    svg.appendChild(svgEl('line', {x1, y1, x2, y2, stroke: '#2e3150', 'stroke-width': '1'}));
+    const lx = cx + (r + 14) * Math.cos(a), ly = cy + padTop + (r + 14) * Math.sin(a);
+    const txt = svgEl('text', {x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+      'font-size': '9', fill: '#8b8fa8'});
+    txt.textContent = dim.length > 10 ? dim.slice(0, 9) + '…' : dim;
+    svg.appendChild(txt);
+  });
+
+  // agent polygons
+  agentDataList.forEach(({scores, color, opacity}) => {
+    const points = dims.map((dim, i) => {
+      const val = (scores[dim] || 0) / 10;
+      const a = (i / n) * 2 * Math.PI - Math.PI / 2;
+      return `${cx + r * val * Math.cos(a)},${cy + padTop + r * val * Math.sin(a)}`;
+    }).join(' ');
+    svg.appendChild(svgEl('polygon', {points, fill: color, 'fill-opacity': opacity || '0.15',
+      stroke: color, 'stroke-width': '1.5'}));
+  });
+
+  return svg;
+}
+
+// ── score bar chart ──────────────────────────────────────────────────────────
+function buildScoreBars(scores) {
+  if (!scores || !Object.keys(scores).length) return el('p', {class:'empty-state'}, 'No scores available.');
+  const maxVal = Math.max(...Object.values(scores), 1);
+  const videos = Object.keys(scores).sort((a, b) => scores[b] - scores[a]);
+  const wrap = el('div', {});
+  videos.forEach((vid, idx) => {
+    const val = scores[vid];
+    const pct = (val / maxVal * 100).toFixed(1);
+    const color = idx === 0 ? '#26de81' : AGENT_COLORS[idx % AGENT_COLORS.length];
+    const row = el('div', {class: 'score-bar-row', style: 'display:flex;align-items:center;gap:.6rem;margin-bottom:.6rem;'});
+    const lbl = el('div', {class: 'score-bar-label', style: 'width:110px;font-size:.82rem;color:var(--muted);text-align:right;padding-right:.5rem;flex-shrink:0;'}, vid);
+    const track = el('div', {class: 'score-bar-track', style: 'flex:1;background:var(--surface2);border-radius:4px;height:22px;position:relative;'});
+    const fill = el('div', {class: 'score-bar-fill', style: `width:${pct}%;height:100%;background:${color};border-radius:4px;display:flex;align-items:center;padding-left:.5rem;transition:width .4s;`});
+    fill.appendChild(el('span', {style: 'font-size:.78rem;font-weight:700;color:#fff;'}, fmt(val)));
+    track.appendChild(fill);
+    row.append(lbl, track);
+    wrap.appendChild(row);
+  });
+  return wrap;
+}
+
+// ── score timeline table ─────────────────────────────────────────────────────
+function buildTimeline(dims, videos, agents) {
+  if (!agents.length) return el('p', {class:'empty-state'}, 'No agent data.');
+  const table = el('table', {class: 'timeline-table'});
+  const thead = el('thead', {});
+  const hr = el('tr', {});
+  ['Agent', 'Video', ...dims.map(d => d), 'Δ avg'].forEach(h => hr.appendChild(el('th', {}, h)));
+  thead.appendChild(hr);
+  table.appendChild(thead);
+  const tbody = el('tbody', {});
+  agents.forEach((agent, ai) => {
+    const color = AGENT_COLORS[ai % AGENT_COLORS.length];
+    videos.forEach(vid => {
+      const initScores = agentVideoScores(D.initial_judgements, agent, vid);
+      const finalScores = agentVideoScores(D.final_judgements, agent, vid);
+      if (!finalScores) return;
+      const tr = el('tr', {});
+      const agentCell = el('td', {style: `border-left:3px solid ${color};padding-left:.6rem;`}, agent.replace(/_/g,' '));
+      tr.appendChild(agentCell);
+      tr.appendChild(el('td', {}, vid));
+      let totalDelta = 0, dimCount = 0;
+      dims.forEach(dim => {
+        const init = initScores ? (initScores[dim] || 0) : null;
+        const fin = finalScores[dim] || 0;
+        const delta = init !== null ? fin - init : null;
+        if (delta !== null) { totalDelta += delta; dimCount++; }
+        const cls = delta === null ? 'delta-neu' : delta > 0 ? 'delta-pos' : delta < 0 ? 'delta-neg' : 'delta-neu';
+        const txt = delta === null ? fmt(fin) : `${fmt(fin)} (${delta >= 0 ? '+':''}${delta.toFixed(1)})`;
+        tr.appendChild(el('td', {class: cls}, txt));
+      });
+      const avgDelta = dimCount ? totalDelta / dimCount : 0;
+      const deltaCls = avgDelta > 0.05 ? 'delta-pos' : avgDelta < -0.05 ? 'delta-neg' : 'delta-neu';
+      tr.appendChild(el('td', {class: deltaCls}, dimCount ? `${avgDelta >= 0 ? '+':''}${avgDelta.toFixed(2)}` : '—'));
+      tbody.appendChild(tr);
+    });
+  });
+  table.appendChild(tbody);
+  return table;
+}
+
+// ── consistency flags ─────────────────────────────────────────────────────────
+function buildFlags(report) {
+  const flags = (report || {}).flags || [];
+  if (!flags.length) return el('p', {class:'empty-state'}, 'No consistency flags raised.');
+  const wrap = el('div', {});
+  flags.forEach(f => {
+    const item = el('div', {class:'flag-item'});
+    item.appendChild(el('div', {class:'flag-type'}, f.classification || 'FLAG'));
+    item.appendChild(el('div', {}, `${f.agent} — ${f.video}`));
+    item.appendChild(el('div', {style:'color:var(--muted);font-size:.8rem;margin-top:.2rem;'}, f.claim || ''));
+    if (f.contradicting_evidence) {
+      item.appendChild(el('div', {style:'color:var(--danger);font-size:.78rem;margin-top:.2rem;'}, `↳ ${f.contradicting_evidence}`));
+    }
+    wrap.appendChild(item);
+  });
+  return wrap;
+}
+
+// ── escalation events ─────────────────────────────────────────────────────────
+function buildEscalations(events) {
+  if (!events || !events.length) return el('p', {class:'empty-state'}, 'No escalation events.');
+  const wrap = el('div', {});
+  events.forEach(e => {
+    const item = el('div', {class:'esc-item'});
+    const hdr = el('div', {style:'display:flex;justify-content:space-between;'});
+    hdr.appendChild(el('span', {class:'esc-type'}, e.type || 'event'));
+    hdr.appendChild(el('span', {class:'esc-ts'}, (e.ts || '').slice(0, 19)));
+    item.appendChild(hdr);
+    item.appendChild(el('div', {style:'margin-top:.3rem;color:var(--text);'}, e.node || ''));
+    if (e.reasons && e.reasons.length) {
+      item.appendChild(el('div', {style:'color:var(--muted);font-size:.78rem;margin-top:.2rem;'}, e.reasons.join(' · ')));
+    }
+    wrap.appendChild(item);
+  });
+  return wrap;
+}
+
+// ── per-video notes ───────────────────────────────────────────────────────────
+function buildVideoNotes(verdict, videos) {
+  const notes = (verdict || {}).per_video_notes || {};
+  const wrap = el('div', {});
+  videos.forEach(vid => {
+    if (!notes[vid]) return;
+    const row = el('div', {style:'margin-bottom:.7rem;'});
+    row.appendChild(el('div', {style:'font-size:.78rem;color:var(--muted);margin-bottom:.2rem;'}, vid));
+    row.appendChild(el('div', {style:'font-size:.85rem;'}, notes[vid]));
+    wrap.appendChild(row);
+  });
+  return wrap;
+}
+
+// ── ranking table ─────────────────────────────────────────────────────────────
+function buildRanking(verdict) {
+  const ranking = (verdict || {}).ranking || [];
+  const scores = {};
+  // try to get scores from scorecards data if embedded, otherwise skip
+  const table = el('table', {class:'rank-table'});
+  const thead = el('tr', {});
+  ['Rank','Video','Confidence'].forEach(h => thead.appendChild(el('th',{},h)));
+  table.appendChild(el('thead',{},thead));
+  const tbody = el('tbody',{});
+  ranking.forEach((vid, i) => {
+    const tr = el('tr',{});
+    const badge = el('span',{class:`rank-badge ${i===0?'rank-badge-1':''}`}, String(i+1));
+    tr.appendChild(el('td',{class:i===0?'rank-1':''}, badge, vid));
+    tr.appendChild(el('td',{},vid));
+    tr.appendChild(el('td',{}, i===0 ? pct(verdict.confidence) : '—'));
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  return table;
+}
+
+// ── main render ───────────────────────────────────────────────────────────────
+function render() {
+  const verdict = D.verdict || {};
+  const videos = videoNames();
+  const dims = rubricDims();
+  const agents = Object.keys(D.final_judgements || {});
+  const lowConf = (verdict.confidence || 1) < CONF_THRESHOLD;
+
+  // Header
+  const header = el('div', {class:'header'});
+  header.appendChild(el('div', {class:'header-brand'}, '⚡ Creative Jury Swarm'));
+  header.appendChild(el('h1', {}, 'Verdict Report'));
+  const meta = el('div', {class:'header-meta'});
+  [
+    ['Run ID', D.run_id || '—'],
+    ['Videos', String(videos.length)],
+    ['Agents', String(agents.length)],
+    ['Confidence', pct(verdict.confidence)],
+  ].forEach(([label, value]) => {
+    const item = el('div', {class:'meta-item'});
+    item.appendChild(el('span', {class:'meta-label'}, label));
+    item.appendChild(el('span', {class:'meta-value'}, value));
+    meta.appendChild(item);
+  });
+  header.appendChild(meta);
+  document.body.appendChild(header);
+
+  // Low confidence banner
+  if (lowConf) {
+    document.body.appendChild(el('div', {class:'low-conf-banner'},
+      '⚠️ ', `Low confidence verdict (${pct(verdict.confidence)}). Review agent scores carefully.`
+    ));
+  }
+
+  // Winner banner
+  const wb = el('div', {class:'winner-banner'});
+  wb.appendChild(el('div', {class:'winner-crown'}, '🏆'));
+  const winfo = el('div', {});
+  winfo.appendChild(el('div', {class:'winner-label'}, 'Winner'));
+  winfo.appendChild(el('div', {class:'winner-name'}, verdict.winner_video || '—'));
+  if (verdict.winner_rationale) {
+    winfo.appendChild(el('div', {class:'winner-rationale'}, verdict.winner_rationale));
+  }
+  wb.appendChild(winfo);
+  document.body.appendChild(wb);
+
+  const main = el('div', {class:'main'});
+
+  // Row 1: auction scores + ranking
+  const row1 = el('div', {class:'grid-2'});
+
+  const scoresCard = el('div', {class:'card'});
+  scoresCard.appendChild(el('h2', {}, 'Auction Scores'));
+
+  // Try to pull scorecards from results dir (may not be in D directly)
+  // Fall back: compute approximate scores from final_judgements
+  const weights = (D.rubric || {}).weights || {};
+  const totalW = Object.values(weights).reduce((a,b)=>a+b,0)||1;
+  const approxScores = {};
+  agents.forEach(agent => {
+    (D.final_judgements[agent]||[]).forEach(j => {
+      const vid = j.video_path.split('/').pop();
+      const rs = Object.entries(j.scores||{}).reduce((s,[d,v])=>s+(weights[d]||0)*v,0)/totalW;
+      const contrib = rs*(j.confidence/100)*(j.token_bid/100);
+      approxScores[vid] = (approxScores[vid]||0)+contrib;
+    });
+  });
+  scoresCard.appendChild(buildScoreBars(Object.keys(approxScores).length ? approxScores : null));
+  row1.appendChild(scoresCard);
+
+  const rankCard = el('div', {class:'card'});
+  rankCard.appendChild(el('h2', {}, 'Ranking'));
+  rankCard.appendChild(buildRanking(verdict));
+  if (verdict.per_video_notes && Object.keys(verdict.per_video_notes).length) {
+    rankCard.appendChild(el('div', {style:'margin-top:1rem;'}));
+    rankCard.appendChild(el('h3', {}, 'Moderator Notes'));
+    rankCard.appendChild(buildVideoNotes(verdict, videos));
+  }
+  row1.appendChild(rankCard);
+  main.appendChild(row1);
+
+  // Row 2: radar charts
+  if (dims.length && agents.length) {
+    const radarCard = el('div', {class:'card full-width'});
+    radarCard.appendChild(el('h2', {}, 'Score Radar — Final Judgements'));
+    const radarWrap = el('div', {class:'radar-wrap'});
+    videos.forEach(vid => {
+      const agentData = agents.map((agent, i) => {
+        const scores = agentVideoScores(D.final_judgements, agent, vid) || {};
+        return {scores, color: AGENT_COLORS[i % AGENT_COLORS.length], opacity: '0.18'};
+      }).filter(d => Object.keys(d.scores).length);
+      const item = el('div', {class:'radar-item'});
+      if (agentData.length) item.appendChild(drawRadar(dims, agentData, 180));
+      item.appendChild(el('div', {class:'radar-title'}, vid));
+      radarWrap.appendChild(item);
+    });
+    radarCard.appendChild(radarWrap);
+    const legend = el('div', {class:'legend', style:'margin-top:1rem;'});
+    agents.forEach((agent, i) => {
+      const li = el('div', {class:'legend-item'});
+      li.appendChild(el('div', {class:'legend-dot', style:`background:${AGENT_COLORS[i%AGENT_COLORS.length]};`}));
+      li.appendChild(agent.replace(/_/g,' '));
+      legend.appendChild(li);
+    });
+    radarCard.appendChild(legend);
+    main.appendChild(el('div', {class:'grid-2'}, radarCard));
+  }
+
+  // Row 3: score timeline
+  if (dims.length && agents.length) {
+    const tlCard = el('div', {class:'card full-width'});
+    tlCard.appendChild(el('h2', {}, 'Score Timeline — Initial → Final'));
+    tlCard.appendChild(buildTimeline(dims, videos, agents));
+    main.appendChild(el('div', {class:'grid-2'}, tlCard));
+  }
+
+  // Row 4: consistency flags + escalations
+  const row4 = el('div', {class:'grid-2'});
+  const flagCard = el('div', {class:'card'});
+  flagCard.appendChild(el('h2', {}, 'Consistency Flags'));
+  flagCard.appendChild(buildFlags(D.consistency_report));
+  row4.appendChild(flagCard);
+
+  const escCard = el('div', {class:'card'});
+  escCard.appendChild(el('h2', {}, 'Escalation Events'));
+  escCard.appendChild(buildEscalations(D.escalation_events));
+  row4.appendChild(escCard);
+  main.appendChild(row4);
+
+  // Row 5: extended thinking expander
+  const modVerdict = D.verdict || {};
+  const thinkingItems = [];
+  if (modVerdict._thinking_moderator) thinkingItems.push(['Moderator — Extended Thinking', modVerdict._thinking_moderator]);
+  if (modVerdict._thinking_brand) thinkingItems.push(['Brand Compliance — Extended Thinking', modVerdict._thinking_brand]);
+  agents.forEach(agent => {
+    const js = (D.final_judgements[agent]||[]);
+    js.forEach(j => {
+      if (j.model_info && j.model_info.thinking) {
+        thinkingItems.push([`${agent.replace(/_/g,' ')} — ${j.video_path.split('/').pop()}`, j.model_info.thinking]);
+      }
+    });
+  });
+  if (thinkingItems.length) {
+    const thCard = el('div', {class:'card full-width'});
+    thCard.appendChild(el('h2', {}, 'Extended Thinking'));
+    thinkingItems.forEach(([label, text]) => {
+      const det = el('details', {});
+      det.appendChild(el('summary', {}, label));
+      det.appendChild(el('div', {class:'thinking-body'}, text));
+      thCard.appendChild(det);
+    });
+    main.appendChild(el('div', {class:'grid-2'}, thCard));
+  }
+
+  document.body.appendChild(main);
+}
+
+document.addEventListener('DOMContentLoaded', render);
+})();
+</script>
+</body>
+</html>

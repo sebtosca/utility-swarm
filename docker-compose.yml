@@ -1,0 +1,23 @@
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+
+  app:
+    build: .
+    depends_on:
+      - jaeger
+    volumes:
+      - ./runs:/home/cjs/runs
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
+      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT:-creative-jury-swarm}
+    entrypoint: ["cjs"]
+    command: ["--help"]

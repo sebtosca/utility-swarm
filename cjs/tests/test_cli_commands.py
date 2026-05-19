@@ -361,6 +361,7 @@ def test_run_json_output_shape(monkeypatch, tmp_path: Path) -> None:
     run_folder = Path(payload["run_folder"])
     assert run_folder.exists()
     assert run_folder.parent.name == "runs"
+    assert (run_folder / "config_snapshot.yaml").exists()
 
 
 # Verify `run --json` fails validation when fewer than 2 videos are provided.

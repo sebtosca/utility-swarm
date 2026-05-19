@@ -47,7 +47,9 @@ def _has_unresolved_flags(state: JuryState) -> bool:
 
 
 def human_review_gate_node(state: JuryState, config: RunnableConfig) -> dict:
-    router = config["configurable"]["router"]
+    configurable = config["configurable"]
+    router = configurable["router"]
+    auto_approve: bool = bool(configurable.get("auto_approve", False))
     escalations_path = router._run_folder / "escalations.jsonl"
 
     max_delta = _compute_max_score_delta(state)
@@ -83,18 +85,21 @@ def human_review_gate_node(state: JuryState, config: RunnableConfig) -> dict:
         border_style="red",
     ))
 
-    proceed = typer.confirm("Continue to Moderator anyway?", default=False)
-    if not proceed:
-        write_escalation_event(
-            escalations_path,
-            type="human_review_rejected",
-            run_id=state["run_id"],
-            node="human_review_gate",
-        )
-        raise HumanReviewRejectedError(
-            f"Human review rejected for run {state['run_id']}. "
-            "Resume with: cjs resume <run_id>"
-        )
+    if auto_approve:
+        logger.warning("human_review_auto_approved", run_id=state["run_id"])
+    else:
+        proceed = typer.confirm("Continue to Moderator anyway?", default=False)
+        if not proceed:
+            write_escalation_event(
+                escalations_path,
+                type="human_review_rejected",
+                run_id=state["run_id"],
+                node="human_review_gate",
+            )
+            raise HumanReviewRejectedError(
+                f"Human review rejected for run {state['run_id']}. "
+                "Resume with: cjs resume <run_id>"
+            )
 
     write_escalation_event(
         escalations_path,

@@ -615,6 +615,11 @@ def run(
         "--strict-confidence",
         help="Exit with error if verdict confidence is below 70%.",
     ),
+    auto_approve: bool = typer.Option(
+        False,
+        "--auto-approve",
+        help="Skip human-in-the-loop prompt at the review gate (auto-approve).",
+    ),
 ) -> None:
     """Run the jury pipeline: brief + videos → winner + report."""
     json_mode = is_json_mode(ctx)
@@ -647,59 +652,85 @@ def run(
     copied_brief = copy_brief_into_run(brief, run_folder)
     copied_videos = copy_videos_into_run(videos, run_folder)
 
+    import yaml
+    (run_folder / "config_snapshot.yaml").write_text(
+        yaml.dump(config.model_dump(), default_flow_style=False, sort_keys=True)
+    )
+
+    from rich.rule import Rule
+
     if not json_mode:
         console = Console()
-        console.print(
-            "[bold]Pipeline:[/bold] [Brief] → [Video Analysis] → [Jury] → [Auction] → [Report]"
-        )
+        console.print(Rule(f"[bold cyan]Pipeline:[/bold cyan] Brief → Video Analysis → Jury → Auction → Report  ·  [dim]{run_id}[/dim]"))
 
     # --- Phase 9: Brief ingestion (LLM) ---
     router = ModelRouter(run_id=run_id, run_folder=run_folder, config=config)
     brief_dir = run_folder / "brief"
 
     try:
-        raw_text = extract_brief_raw(
-            pdf_path=copied_brief,
-            run_folder=run_folder,
-            max_pages=config.limits.max_pdf_pages,
-        )
         if not json_mode:
-            typer.echo("[1/3] Parsing brief...")
-        parsed_brief = parse_brief(raw_text=raw_text, router=router)
+            with console.status("[cyan]Parsing brief…"):
+                raw_text = extract_brief_raw(
+                    pdf_path=copied_brief,
+                    run_folder=run_folder,
+                    max_pages=config.limits.max_pdf_pages,
+                )
+                parsed_brief = parse_brief(raw_text=raw_text, router=router)
+        else:
+            raw_text = extract_brief_raw(
+                pdf_path=copied_brief,
+                run_folder=run_folder,
+                max_pages=config.limits.max_pdf_pages,
+            )
+            parsed_brief = parse_brief(raw_text=raw_text, router=router)
         (brief_dir / "brief.json").write_text(parsed_brief.model_dump_json(indent=2))
 
         if not json_mode:
-            typer.echo("[2/3] Generating rubric...")
-        rubric = generate_rubric(brief=parsed_brief, router=router)
+            with console.status("[cyan]Generating rubric…"):
+                rubric = generate_rubric(brief=parsed_brief, router=router)
+        else:
+            rubric = generate_rubric(brief=parsed_brief, router=router)
         (brief_dir / "rubric.json").write_text(rubric.model_dump_json(indent=2))
 
         if not json_mode:
-            typer.echo("[3/3] Loading brand rules...")
-        brand_rules = load_brand_rules_from_yaml(brand)
+            with console.status("[cyan]Loading brand rules…"):
+                brand_rules = load_brand_rules_from_yaml(brand)
+        else:
+            brand_rules = load_brand_rules_from_yaml(brand)
         (brief_dir / "brand_rules.json").write_text(brand_rules.model_dump_json(indent=2))
 
     except BriefIngestError as exc:
         if json_mode:
             output_result({"status": "error", "run_id": run_id, "error": str(exc)}, json_mode=True)
         else:
-            typer.secho(f"Brief ingestion failed: {exc}", err=True, fg=typer.colors.RED)
+            console.print(f"[bold red]✗ Brief ingestion failed:[/bold red] {exc}")
         raise typer.Exit(1)
 
     if not json_mode:
-        typer.secho("Brief ingestion complete.", fg=typer.colors.GREEN)
+        dim_count = len(rubric.weights) if hasattr(rubric, "weights") else "?"
+        console.print(f"[green]✓[/green] Brief ingestion complete. [dim]{dim_count} rubric dimension(s)[/dim]")
 
     # --- Phase 10: Video analysis ---
     dossiers = []
     for i, video_path in enumerate(copied_videos, start=1):
-        if not json_mode:
-            typer.echo(f"[Video {i}/{len(copied_videos)}] Analysing {video_path.name}...")
         try:
-            dossier = analyze_video(
-                video_path=video_path,
-                run_folder=run_folder,
-                router=router,
-                config=config,
-            )
+            if not json_mode:
+                with console.status(f"[cyan]Analysing {video_path.name}… [{i}/{len(copied_videos)}]"):
+                    dossier = analyze_video(
+                        video_path=video_path,
+                        run_folder=run_folder,
+                        router=router,
+                        config=config,
+                    )
+                dur = f"{dossier.duration_sec:.0f}s" if dossier.duration_sec else "?"
+                console.print(f"[green]✓[/green] {video_path.name} [dim]({dur})[/dim]")
+            else:
+                dossier = analyze_video(
+                    video_path=video_path,
+                    run_folder=run_folder,
+                    router=router,
+                    config=config,
+                )
             dossiers.append(dossier)
         except VideoAnalysisError as exc:
             if json_mode:
@@ -707,13 +738,11 @@ def run(
                     {"status": "error", "run_id": run_id, "error": str(exc)}, json_mode=True
                 )
             else:
-                typer.secho(f"Video analysis failed: {exc}", err=True, fg=typer.colors.RED)
+                console.print(f"[bold red]✗ Video analysis failed:[/bold red] {exc}")
             raise typer.Exit(1)
 
     if not json_mode:
-        typer.secho(
-            f"Video analysis complete. {len(dossiers)} dossier(s) written.", fg=typer.colors.GREEN
-        )
+        console.print(f"[green]✓[/green] Video analysis complete. [dim]{len(dossiers)} dossier(s) written.[/dim]")
 
     # --- Phase 11: LangGraph jury swarm ---
     import json as _json
@@ -722,7 +751,7 @@ def run(
     from cjs.graph.state import JuryState
 
     if not json_mode:
-        typer.echo("[Jury] Running jury swarm...")
+        console.print(Rule("[bold cyan]Jury[/bold cyan]"))
 
     initial_jury_state: JuryState = {
         "run_id": run_id,
@@ -739,41 +768,81 @@ def run(
     checkpoints_db = run_folder / "checkpoints.db"
     saver = SqliteSaver.from_conn_string(str(checkpoints_db))
     compiled = build_jury_graph().compile(checkpointer=saver)
-    thread_config = {"configurable": {"thread_id": run_id, "router": router, "strict_confidence": strict_confidence}}
+    thread_config = {"configurable": {"thread_id": run_id, "router": router, "strict_confidence": strict_confidence, "auto_approve": auto_approve}}
 
     from cjs.escalation.human_review import HumanReviewRejectedError
     from cjs.escalation.confidence_gate import LowConfidenceError
+    from cjs.observability.langsmith import invoke_with_tracing, write_langsmith_url
     try:
-        final_state = compiled.invoke(initial_jury_state, config=thread_config)
+        if not json_mode:
+            with console.status("[cyan]Running jury swarm (parallel scoring → deliberation → verdict)…"):
+                final_state, langsmith_url = invoke_with_tracing(
+                    compiled, initial_jury_state, thread_config, run_id, len(videos)
+                )
+        else:
+            final_state, langsmith_url = invoke_with_tracing(
+                compiled, initial_jury_state, thread_config, run_id, len(videos)
+            )
     except HumanReviewRejectedError:
         if json_mode:
             output_result({"status": "paused", "run_id": run_id,
                            "reason": "human_review_rejected"}, json_mode=True)
         else:
-            typer.secho(
-                f"Run paused at human review gate. Resume with: cjs resume {run_id}",
-                fg=typer.colors.YELLOW,
-            )
+            console.print(f"[yellow]⚠ Run paused at human review gate.[/yellow] Resume with: cjs resume {run_id}")
         raise typer.Exit(0)
     except LowConfidenceError as exc:
         if json_mode:
             output_result({"status": "error", "run_id": run_id, "error": str(exc)}, json_mode=True)
         else:
-            typer.secho(str(exc), err=True, fg=typer.colors.RED)
+            console.print(f"[bold red]✗ Low confidence:[/bold red] {exc}")
         raise typer.Exit(1)
     except Exception as exc:
         if json_mode:
             output_result({"status": "error", "run_id": run_id, "error": str(exc)}, json_mode=True)
         else:
-            typer.secho(f"Jury swarm failed: {exc}", err=True, fg=typer.colors.RED)
+            console.print(f"[bold red]✗ Jury swarm failed:[/bold red] {exc}")
         raise typer.Exit(1)
 
+    if not json_mode:
+        console.print("[green]✓[/green] Jury complete.")
+
     from cjs.auction.engine import run_auction
-    auction_verdict = run_auction(final_state, run_folder)
 
     if not json_mode:
-        typer.secho(f"Winner: {auction_verdict['winner_video']}", fg=typer.colors.GREEN)
-        typer.secho("Run complete.", fg=typer.colors.GREEN)
+        with console.status("[cyan]Running auction…"):
+            auction_verdict = run_auction(final_state, run_folder)
+    else:
+        auction_verdict = run_auction(final_state, run_folder)
+
+    import webbrowser
+    from cjs.report.builder import build_report
+
+    metrics_path = run_folder / "results" / "metrics.json"
+    if langsmith_url:
+        write_langsmith_url(metrics_path, langsmith_url)
+    metrics: dict = {}
+    if metrics_path.exists():
+        try:
+            metrics = json.loads(metrics_path.read_text())
+        except Exception:
+            pass
+    report_path = build_report(run_folder, final_state, auction_verdict, metrics)
+
+    if not json_mode:
+        from rich.panel import Panel
+        winner = auction_verdict["winner_video"]
+        conf = auction_verdict.get("confidence", 0)
+        rationale = auction_verdict.get("winner_rationale", "")
+        conf_str = f"{conf:.0%}" if isinstance(conf, float) else str(conf)
+        console.print(Panel(
+            f"[bold green]{winner}[/bold green]  [dim]confidence {conf_str}[/dim]\n\n{rationale}",
+            title="[bold]Winner[/bold]",
+            border_style="green",
+        ))
+        console.print(f"[green]✓[/green] Winner: {winner}")
+        console.print(f"[dim]Report:[/dim] {report_path}")
+        webbrowser.open(report_path.as_uri())
+        console.print(Rule("[bold green]Run complete.[/bold green]"))
 
     if json_mode:
         output_result(
@@ -784,6 +853,7 @@ def run(
                 "winner": auction_verdict["winner_video"],
                 "verdict": str(run_folder / "results" / "verdict.json"),
                 "scorecards": str(run_folder / "results" / "scorecards.json"),
+                "report": str(report_path),
             },
             json_mode=True,
         )
@@ -936,6 +1006,11 @@ def resume(
         "--strict-confidence",
         help="Exit with error if verdict confidence is below 70%.",
     ),
+    auto_approve: bool = typer.Option(
+        False,
+        "--auto-approve",
+        help="Skip human-in-the-loop prompt at the review gate (auto-approve).",
+    ),
 ) -> None:
     """Resume a run from its last LangGraph checkpoint."""
     import json as _json
@@ -965,15 +1040,18 @@ def resume(
     router = ModelRouter(run_id=run_id, run_folder=run_folder, config=config)
     saver = SqliteSaver.from_conn_string(str(checkpoints_db))
     compiled = build_jury_graph().compile(checkpointer=saver)
-    thread_config = {"configurable": {"thread_id": run_id, "router": router, "strict_confidence": strict_confidence}}
+    thread_config = {"configurable": {"thread_id": run_id, "router": router, "strict_confidence": strict_confidence, "auto_approve": auto_approve}}
 
     if not json_output:
         typer.echo(f"Resuming run {run_id}...")
 
     from cjs.escalation.human_review import HumanReviewRejectedError
     from cjs.escalation.confidence_gate import LowConfidenceError
+    from cjs.observability.langsmith import invoke_with_tracing, write_langsmith_url
     try:
-        final_state = compiled.invoke(None, config=thread_config)
+        final_state, langsmith_url = invoke_with_tracing(
+            compiled, None, thread_config, run_id, 0
+        )
     except HumanReviewRejectedError:
         if json_output:
             output_result({"ok": False, "status": "paused", "run_id": run_id,
@@ -1000,11 +1078,31 @@ def resume(
     from cjs.auction.engine import run_auction
     auction_verdict = run_auction(final_state, run_folder) if final_state else {}
 
+    report_path = None
+    if final_state and auction_verdict:
+        import webbrowser
+        from cjs.report.builder import build_report
+
+        metrics_path = run_folder / "results" / "metrics.json"
+        if langsmith_url:
+            write_langsmith_url(metrics_path, langsmith_url)
+        metrics: dict = {}
+        if metrics_path.exists():
+            try:
+                metrics = json.loads(metrics_path.read_text())
+            except Exception:
+                pass
+        report_path = build_report(run_folder, final_state, auction_verdict, metrics)
+        if not json_output:
+            typer.echo(f"Report: {report_path}")
+            webbrowser.open(report_path.as_uri())
+
     if json_output:
         output_result(
             {
                 "ok": True, "run_id": run_id,
                 "winner": auction_verdict.get("winner_video"),
+                "report": str(report_path) if report_path else None,
             },
             json_mode=True,
         )
