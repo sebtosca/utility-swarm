@@ -1111,6 +1111,41 @@ def resume(
         typer.secho(f"Run {run_id} complete. Winner: {winner}", fg=typer.colors.GREEN)
 
 
+@app.command()
+def ui(
+    host: str = typer.Option("127.0.0.1", help="Host to bind to."),
+    port: int = typer.Option(8000, help="Port to listen on."),
+    no_open: bool = typer.Option(False, "--no-open", help="Don't open browser automatically."),
+) -> None:
+    """Launch the live jury room web UI (FastAPI + WebSocket)."""
+    import threading
+    import time
+    import webbrowser
+
+    import uvicorn
+
+    from cjs.ui.app import create_app
+
+    try:
+        config = load_config() or None
+    except ConfigError:
+        config = None
+
+    web_app = create_app(config_override=config)
+
+    if not no_open:
+        url = f"http://{host}:{port}"
+
+        def _open_browser() -> None:
+            time.sleep(1.2)
+            webbrowser.open(url)
+
+        threading.Thread(target=_open_browser, daemon=True).start()
+        typer.echo(f"Jury room → {url}")
+
+    uvicorn.run(web_app, host=host, port=port, log_level="warning")
+
+
 # Keep top-level command help ordered by the expected workflow.
 def _apply_command_order() -> None:
     order = {
@@ -1118,11 +1153,13 @@ def _apply_command_order() -> None:
         "config": 2,
         "brand": 3,
         "run": 4,
-        "runs": 5,
-        "report": 6,
-        "audit": 7,
-        "models": 8,
-        "doctor": 9,
+        "resume": 5,
+        "ui": 6,
+        "runs": 7,
+        "report": 8,
+        "audit": 9,
+        "models": 10,
+        "doctor": 11,
     }
 
     def _cmd_name(command: object) -> str:

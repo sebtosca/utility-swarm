@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CJS — Jury Room</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0d1117;
+  --surface:  #161b22;
+  --border:   #30363d;
+  --text:     #e6edf3;
+  --muted:    #8b949e;
+  --accent:   #58a6ff;
+  --green:    #3fb950;
+  --yellow:   #d29922;
+  --red:      #f85149;
+  --purple:   #bc8cff;
+  --radius:   8px;
+}
+
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+       background: var(--bg); color: var(--text); min-height: 100vh; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Layout ── */
+.page { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+
+header.top-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 24px; border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+header.top-bar h1 { font-size: 1.2rem; font-weight: 600; letter-spacing: -.3px; }
+header.top-bar .subtitle { color: var(--muted); font-size: .82rem; margin-top: 2px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 20px; font-size: .75rem; font-weight: 600;
+}
+.badge-live   { background: #1a2e1a; color: var(--green); border: 1px solid var(--green); }
+.badge-done   { background: #172036; color: var(--accent); border: 1px solid var(--accent); }
+.badge-error  { background: #2e1a1a; color: var(--red);   border: 1px solid var(--red); }
+.badge-run-id { background: var(--surface); color: var(--muted); border: 1px solid var(--border); font-weight: 400; }
+
+/* ── Cards ── */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px;
+}
+.card h3 { font-size: .9rem; font-weight: 600; color: var(--muted); text-transform: uppercase;
+           letter-spacing: .06em; margin-bottom: 14px; }
+
+/* ── Lobby ── */
+#lobby { display: block; }
+.lobby-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; }
+@media (max-width: 700px) { .lobby-grid { grid-template-columns: 1fr; } }
+
+.form-field { margin-bottom: 16px; }
+.form-field label { display: block; font-size: .83rem; color: var(--muted); margin-bottom: 5px; }
+.form-field input[type=file] {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 5px;
+  background: var(--bg); color: var(--text); font-size: .9rem; cursor: pointer;
+}
+.form-field input[type=file]:hover { border-color: var(--accent); }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 18px; border-radius: 6px; font-size: .88rem; font-weight: 600;
+  cursor: pointer; border: none; transition: opacity .15s;
+}
+.btn:hover { opacity: .85; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #0d1117; }
+.btn-outline  { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+
+.runs-table { width: 100%; border-collapse: collapse; font-size: .87rem; }
+.runs-table th { text-align: left; padding: 8px 10px; color: var(--muted);
+                 font-size: .78rem; text-transform: uppercase; letter-spacing: .05em;
+                 border-bottom: 1px solid var(--border); }
+.runs-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
+.runs-table tr:last-child td { border-bottom: none; }
+.runs-table tr:hover td { background: #1c2230; }
+.status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+              margin-right: 6px; }
+.dot-complete { background: var(--green); }
+.dot-progress { background: var(--yellow); }
+
+/* ── Pipeline progress strip ── */
+.pipeline-strip {
+  display: flex; align-items: center; gap: 0; overflow-x: auto;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 16px; margin: 24px 0;
+  scrollbar-width: thin;
+}
+.pipe-node {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  min-width: 80px; padding: 0 6px; position: relative;
+}
+.pipe-node::after {
+  content: ''; position: absolute; top: 10px; right: -6px;
+  width: 12px; height: 2px; background: var(--border);
+}
+.pipe-node:last-child::after { display: none; }
+.pipe-dot {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--border); border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; transition: all .3s;
+}
+.pipe-dot.active   { background: var(--yellow); border-color: var(--yellow); animation: pulse 1s infinite; }
+.pipe-dot.complete { background: var(--green);  border-color: var(--green); }
+.pipe-dot.error    { background: var(--red);    border-color: var(--red); }
+.pipe-label { font-size: .68rem; color: var(--muted); text-align: center; line-height: 1.2; white-space: nowrap; }
+.pipe-label.active   { color: var(--yellow); font-weight: 600; }
+.pipe-label.complete { color: var(--green); }
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(210,153,34,.4); }
+  50%       { box-shadow: 0 0 0 6px rgba(210,153,34,0); }
+}
+
+/* ── Agent cards ── */
+.agents-section { margin-bottom: 24px; }
+.agents-section h3 { font-size: .85rem; font-weight: 600; color: var(--muted);
+                     text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px; }
+.agents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+}
+.agent-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px; transition: border-color .3s;
+}
+.agent-card.active  { border-color: var(--yellow); }
+.agent-card.done    { border-color: var(--green); }
+.agent-card.error   { border-color: var(--red); }
+
+.agent-name  { font-size: .83rem; font-weight: 600; margin-bottom: 6px; }
+.agent-status { font-size: .74rem; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+.agent-status.waiting  { color: var(--muted); }
+.agent-status.scoring  { color: var(--yellow); }
+.agent-status.done     { color: var(--green); }
+
+.spinner { display: inline-block; width: 10px; height: 10px; border: 2px solid var(--yellow);
+           border-top-color: transparent; border-radius: 50%; animation: spin .6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Mini score bars per agent per video */
+.score-bars { margin-top: 10px; }
+.score-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: .7rem; }
+.score-label { color: var(--muted); width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.score-bar-bg { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.score-bar-fill { height: 100%; border-radius: 2px; background: var(--accent); transition: width .5s; }
+.score-val  { color: var(--muted); width: 24px; text-align: right; }
+
+/* ── Consistency flags ── */
+.flags-section { margin-bottom: 24px; }
+.flag-item { padding: 10px 12px; border-radius: 5px; border-left: 3px solid var(--yellow);
+             background: #201c10; margin-bottom: 8px; font-size: .83rem; }
+.flag-item .flag-type { font-size: .72rem; color: var(--yellow); font-weight: 600;
+                        text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px; }
+.flag-item .flag-agent { color: var(--muted); }
+
+/* ── Winner banner ── */
+.winner-banner {
+  background: linear-gradient(135deg, #0e2a1e 0%, #0d1f3c 100%);
+  border: 1px solid var(--green); border-radius: var(--radius);
+  padding: 32px; text-align: center; margin: 24px 0;
+  animation: slideIn .5s ease-out;
+}
+@keyframes slideIn { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+.winner-banner .trophy  { font-size: 2.5rem; margin-bottom: 10px; }
+.winner-banner h2 { color: var(--green); font-size: 1rem; text-transform: uppercase;
+                    letter-spacing: .1em; margin-bottom: 8px; }
+.winner-name { font-size: 1.6rem; font-weight: 700; margin-bottom: 16px; }
+.btn-report { display: inline-flex; align-items: center; gap: 6px; padding: 9px 20px;
+              background: var(--green); color: #0d1117; border-radius: 6px;
+              font-weight: 600; font-size: .88rem; text-decoration: none; }
+.btn-report:hover { opacity: .85; text-decoration: none; }
+
+/* ── Error banner ── */
+.error-banner {
+  background: #2e1a1a; border: 1px solid var(--red); border-radius: var(--radius);
+  padding: 14px 16px; color: var(--red); font-size: .88rem; margin: 12px 0;
+}
+.error-banner strong { display: block; margin-bottom: 4px; }
+
+/* ── Utility ── */
+[hidden] { display: none !important; }
+.mt-4  { margin-top: 16px; }
+.mt-6  { margin-top: 24px; }
+.empty-state { color: var(--muted); font-size: .88rem; padding: 20px 0; }
+</style>
+</head>
+<body>
+
+<!-- ═══ LOBBY ═══════════════════════════════════════════════════════════════ -->
+<header class="top-bar">
+  <div>
+    <h1>Creative Jury Swarm</h1>
+    <div class="subtitle">AI-powered multi-agent creative evaluation</div>
+  </div>
+  <span id="top-status-badge" class="badge badge-run-id" hidden></span>
+</header>
+
+<div class="page">
+
+  <div id="lobby">
+    <div class="lobby-grid">
+
+      <!-- Upload form -->
+      <div class="card">
+        <h3>New Jury Run</h3>
+        <form id="run-form">
+          <div class="form-field">
+            <label>Creative Brief (PDF) *</label>
+            <input type="file" id="brief-input" accept=".pdf" required>
+          </div>
+          <div class="form-field">
+            <label>Video Ads (MP4 / MOV, select 2 or more) *</label>
+            <input type="file" id="videos-input" accept=".mp4,.mov,.avi" multiple required>
+          </div>
+          <div class="form-field">
+            <label>Brand Pack (YAML — optional, inferred from brief if omitted)</label>
+            <input type="file" id="brand-input" accept=".yaml,.yml">
+          </div>
+          <button type="submit" class="btn btn-primary" id="submit-btn">
+            ▶ Start Jury
+          </button>
+        </form>
+        <div id="submit-error" class="error-banner mt-4" hidden></div>
+      </div>
+
+      <!-- Past runs -->
+      <div class="card">
+        <h3>Past Runs</h3>
+        <div id="runs-list"><span class="empty-state">Loading…</span></div>
+      </div>
+
+    </div>
+  </div><!-- /lobby -->
+
+  <!-- ═══ JURY ROOM ════════════════════════════════════════════════════════ -->
+  <div id="jury-room" hidden>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;" class="mt-4">
+      <div>
+        <span id="room-run-id" class="badge badge-run-id"></span>
+      </div>
+      <span id="room-status" class="badge badge-live">● LIVE</span>
+    </div>
+
+    <!-- Pipeline progress -->
+    <div class="pipeline-strip" id="pipeline-strip"></div>
+
+    <!-- Winner banner (hidden until done) -->
+    <div id="winner-banner" hidden>
+      <div class="winner-banner">
+        <div class="trophy">🏆</div>
+        <h2>Winner</h2>
+        <div class="winner-name" id="winner-name"></div>
+        <a id="report-link" class="btn-report" href="#" target="_blank">View Full Report →</a>
+      </div>
+    </div>
+
+    <!-- Error banner (hidden unless error) -->
+    <div id="error-banner" hidden>
+      <div class="error-banner">
+        <strong>Run error</strong>
+        <span id="error-message"></span>
+      </div>
+    </div>
+
+    <!-- Agents grid -->
+    <div class="agents-section mt-6">
+      <h3>Jury Agents</h3>
+      <div class="agents-grid" id="agents-grid"></div>
+    </div>
+
+    <!-- Consistency flags -->
+    <div id="flags-section" class="card mt-6" hidden>
+      <h3>Consistency Flags</h3>
+      <div id="flags-list"></div>
+    </div>
+
+  </div><!-- /jury-room -->
+
+</div><!-- /page -->
+
+<script>
+// ── Constants ────────────────────────────────────────────────────────────────
+const SCORING_AGENTS = [
+  { node: 'creative_strategist_node',  label: 'Creative Strategist',  icon: '🎨' },
+  { node: 'brand_compliance_node',     label: 'Brand Compliance',     icon: '⚖️' },
+  { node: 'audience_psychology_node',  label: 'Audience Psychology',  icon: '🧠' },
+  { node: 'performance_marketer_node', label: 'Performance Marketer', icon: '📈' },
+  { node: 'storytelling_critic_node',  label: 'Storytelling Critic',  icon: '📖' },
+];
+
+const PIPELINE_NODES = [
+  { id: 'brief_ingest',              label: 'Brief' },
+  { id: '_video',                    label: 'Videos' },
+  { id: 'creative_strategist_node',  label: 'Strategist' },
+  { id: 'brand_compliance_node',     label: 'Brand' },
+  { id: 'audience_psychology_node',  label: 'Audience' },
+  { id: 'performance_marketer_node', label: 'Perf' },
+  { id: 'storytelling_critic_node',  label: 'Story' },
+  { id: 'consistency_checker_node',  label: 'Consistency' },
+  { id: 'deliberation_round_node',   label: 'Deliberation' },
+  { id: 'moderator_node',            label: 'Moderator' },
+  { id: 'confidence_gate_node',      label: 'Gate' },
+  { id: 'auction',                   label: 'Auction' },
+];
+
+// ── State ────────────────────────────────────────────────────────────────────
+let ws = null;
+let currentRunId = null;
+
+// ── Lobby ────────────────────────────────────────────────────────────────────
+async function loadPastRuns() {
+  try {
+    const resp = await fetch('/api/runs');
+    const runs = await resp.json();
+    const el = document.getElementById('runs-list');
+    if (!runs.length) {
+      el.innerHTML = '<p class="empty-state">No runs yet.</p>';
+      return;
+    }
+    const rows = runs.map(r => {
+      const dot = r.status === 'complete'
+        ? '<span class="status-dot dot-complete"></span>'
+        : '<span class="status-dot dot-progress"></span>';
+      return `<tr>
+        <td>${dot}${r.run_id}</td>
+        <td><a href="/api/runs/${r.run_id}/report" target="_blank">report</a></td>
+      </tr>`;
+    });
+    el.innerHTML = `<table class="runs-table">
+      <thead><tr><th>Run ID</th><th>Report</th></tr></thead>
+      <tbody>${rows.join('')}</tbody>
+    </table>`;
+  } catch(e) {
+    document.getElementById('runs-list').innerHTML = '<p class="empty-state">Could not load runs.</p>';
+  }
+}
+
+document.getElementById('run-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const submitBtn = document.getElementById('submit-btn');
+  const errEl = document.getElementById('submit-error');
+  errEl.hidden = true;
+
+  const briefFiles  = document.getElementById('brief-input').files;
+  const videosFiles = document.getElementById('videos-input').files;
+  const brandFiles  = document.getElementById('brand-input').files;
+
+  if (!briefFiles.length) { showSubmitError('Select a brief PDF.'); return; }
+  if (videosFiles.length < 2) { showSubmitError('Select at least 2 video files.'); return; }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = '⏳ Submitting…';
+
+  const fd = new FormData();
+  fd.append('brief', briefFiles[0]);
+  for (const f of videosFiles) fd.append('videos', f);
+  if (brandFiles.length) fd.append('brand', brandFiles[0]);
+
+  try {
+    const resp = await fetch('/api/run', { method: 'POST', body: fd });
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      showSubmitError(body.detail || `Server error ${resp.status}`);
+      submitBtn.disabled = false;
+      submitBtn.textContent = '▶ Start Jury';
+      return;
+    }
+    const { run_id, ws_url } = await resp.json();
+    enterJuryRoom(run_id, ws_url);
+  } catch(err) {
+    showSubmitError('Network error: ' + err.message);
+    submitBtn.disabled = false;
+    submitBtn.textContent = '▶ Start Jury';
+  }
+});
+
+function showSubmitError(msg) {
+  const el = document.getElementById('submit-error');
+  el.textContent = msg;
+  el.hidden = false;
+}
+
+// ── Jury room ────────────────────────────────────────────────────────────────
+function enterJuryRoom(runId, wsUrl) {
+  currentRunId = runId;
+  document.getElementById('lobby').hidden = true;
+  document.getElementById('jury-room').hidden = false;
+  document.getElementById('room-run-id').textContent = runId;
+  document.getElementById('top-status-badge').textContent = runId;
+  document.getElementById('top-status-badge').hidden = false;
+
+  buildPipelineStrip();
+  buildAgentCards();
+  connectWebSocket(runId, wsUrl);
+}
+
+function buildPipelineStrip() {
+  const strip = document.getElementById('pipeline-strip');
+  strip.innerHTML = PIPELINE_NODES.map(n => `
+    <div class="pipe-node" id="pipe-${n.id}">
+      <div class="pipe-dot" id="pipe-dot-${n.id}"></div>
+      <div class="pipe-label" id="pipe-label-${n.id}">${n.label}</div>
+    </div>`).join('');
+}
+
+function buildAgentCards() {
+  const grid = document.getElementById('agents-grid');
+  grid.innerHTML = SCORING_AGENTS.map(a => `
+    <div class="agent-card" id="agent-card-${a.node}">
+      <div class="agent-name">${a.icon} ${a.label}</div>
+      <div class="agent-status waiting" id="agent-status-${a.node}">Waiting…</div>
+      <div class="score-bars" id="agent-scores-${a.node}"></div>
+    </div>`).join('');
+}
+
+function connectWebSocket(runId, wsUrl) {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const url = `${proto}://${location.host}${wsUrl}`;
+  ws = new WebSocket(url);
+  ws.onmessage = (e) => handleEvent(JSON.parse(e.data));
+  ws.onerror   = ()  => showRoomError('WebSocket connection error.');
+  ws.onclose   = ()  => { if (currentRunId) setStatus('done'); };
+}
+
+// ── Event dispatch ───────────────────────────────────────────────────────────
+function handleEvent(event) {
+  switch (event.type) {
+    case 'jury_started':
+      break;
+
+    case 'node_start':
+      markPipeActive(event.node);
+      if (isAgentNode(event.node)) markAgentScoring(event.node);
+      break;
+
+    case 'node_complete':
+      markPipeDone(event.node);
+      if (isAgentNode(event.node)) markAgentDone(event.node, event.update);
+      if (event.node === 'consistency_checker_node') showFlags(event.update);
+      if (event.node === 'deliberation_round_node')  updateDeliberationScores(event.update);
+      // treat video nodes as pipeline-only
+      if (event.node && event.node.startsWith('video_')) markPipeDone('_video');
+      break;
+
+    case 'done':
+      markPipeDone('auction');
+      setStatus('done');
+      showWinner(event.winner, event.report_url);
+      break;
+
+    case 'error':
+      setStatus('error');
+      showRoomError(event.message);
+      break;
+  }
+}
+
+// ── Pipeline helpers ─────────────────────────────────────────────────────────
+function markPipeActive(nodeId) {
+  const dot   = document.getElementById(`pipe-dot-${nodeId}`);
+  const label = document.getElementById(`pipe-label-${nodeId}`);
+  if (dot)   { dot.className   = 'pipe-dot active'; }
+  if (label) { label.className = 'pipe-label active'; }
+}
+function markPipeDone(nodeId) {
+  const dot   = document.getElementById(`pipe-dot-${nodeId}`);
+  const label = document.getElementById(`pipe-label-${nodeId}`);
+  if (dot)   { dot.className   = 'pipe-dot complete'; dot.textContent = '✓'; }
+  if (label) { label.className = 'pipe-label complete'; }
+}
+
+// ── Agent card helpers ───────────────────────────────────────────────────────
+function isAgentNode(node) {
+  return SCORING_AGENTS.some(a => a.node === node);
+}
+function markAgentScoring(node) {
+  const card   = document.getElementById(`agent-card-${node}`);
+  const status = document.getElementById(`agent-status-${node}`);
+  if (card)   card.className   = 'agent-card active';
+  if (status) { status.className = 'agent-status scoring';
+                status.innerHTML = '<span class="spinner"></span> Scoring…'; }
+  markPipeActive(node);
+}
+function markAgentDone(node, update) {
+  const card   = document.getElementById(`agent-card-${node}`);
+  const status = document.getElementById(`agent-status-${node}`);
+  if (card)   card.className   = 'agent-card done';
+  if (status) { status.className = 'agent-status done'; status.textContent = '✓ Done'; }
+  markPipeDone(node);
+
+  // Try to extract scores from the state update
+  const judgements = (update && (update.initial_judgements || update.final_judgements)) || {};
+  const allJudgements = Object.values(judgements).flat();
+  if (!allJudgements.length) return;
+
+  // Find judgements for this agent (first video for simplicity)
+  const agentKey = node.replace('_node', '');
+  const found = allJudgements.find(j => j && j.agent_name && j.agent_name.includes(agentKey.split('_')[0]));
+  if (!found || !found.scores) return;
+  renderScoreBars(node, found.scores);
+}
+function renderScoreBars(node, scores) {
+  const container = document.getElementById(`agent-scores-${node}`);
+  if (!container) return;
+  const html = Object.entries(scores).slice(0, 4).map(([dim, val]) => {
+    const pct = Math.min(100, Math.max(0, (val / 10) * 100));
+    return `<div class="score-row">
+      <span class="score-label" title="${dim}">${dim.replace(/_/g,' ')}</span>
+      <div class="score-bar-bg"><div class="score-bar-fill" style="width:${pct}%"></div></div>
+      <span class="score-val">${Number(val).toFixed(1)}</span>
+    </div>`;
+  }).join('');
+  container.innerHTML = html;
+}
+function updateDeliberationScores(update) {
+  if (!update) return;
+  const judgements = update.final_judgements || {};
+  Object.entries(judgements).forEach(([agentName, jList]) => {
+    if (!Array.isArray(jList) || !jList.length) return;
+    const j = jList[0];
+    if (!j || !j.scores) return;
+    // Match agent name to node id
+    const match = SCORING_AGENTS.find(a => a.node.startsWith(agentName.split('_')[0]) ||
+                                           agentName.includes(a.label.toLowerCase().split(' ')[0]));
+    if (match) renderScoreBars(match.node, j.scores);
+  });
+}
+
+// ── Consistency flags ────────────────────────────────────────────────────────
+function showFlags(update) {
+  if (!update) return;
+  const report = update.consistency_report;
+  if (!report || !report.flags || !report.flags.length) return;
+  const section = document.getElementById('flags-section');
+  const list    = document.getElementById('flags-list');
+  list.innerHTML = report.flags.map(f => `
+    <div class="flag-item">
+      <div class="flag-type">${f.classification || f.flag_type || 'Flag'}</div>
+      <div><span class="flag-agent">${f.agent || f.agent_name || ''}</span>
+           ${f.video || f.video_path ? ' · ' + (f.video || f.video_path).split('/').pop() : ''}</div>
+      <div style="margin-top:4px;color:var(--text)">${f.claim || ''}</div>
+    </div>`).join('');
+  section.hidden = false;
+}
+
+// ── Winner / status ──────────────────────────────────────────────────────────
+function showWinner(winner, reportUrl) {
+  document.getElementById('winner-name').textContent = winner || '—';
+  const link = document.getElementById('report-link');
+  link.href = reportUrl || '#';
+  document.getElementById('winner-banner').hidden = false;
+}
+function showRoomError(msg) {
+  document.getElementById('error-message').textContent = msg;
+  document.getElementById('error-banner').hidden = false;
+}
+function setStatus(state) {
+  const badge = document.getElementById('room-status');
+  if (state === 'done') {
+    badge.className = 'badge badge-done';
+    badge.textContent = '✓ Complete';
+  } else if (state === 'error') {
+    badge.className = 'badge badge-error';
+    badge.textContent = '✗ Error';
+  }
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+loadPastRuns();
+</script>
+</body>
+</html>

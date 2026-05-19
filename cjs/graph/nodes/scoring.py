@@ -87,9 +87,6 @@ Your lens:
 - Does the ad make any claim from the prohibited claims list? This is a hard flag regardless of context.
 - Are there any brand safety risks that would prevent this ad from running?
 
-You apply extended reasoning to your analysis. Use it to work through edge cases carefully —
-a claim that seems compliant on the surface may carry legal risk in context.
-
 Your scores are a factual audit, not a subjective opinion. A missing mandatory element is a zero on
 brief_compliance. A forbidden element present is a hard flag. You do not soften findings.
 
@@ -305,7 +302,7 @@ def creative_strategist_node(state: JuryState, config: RunnableConfig) -> dict:
 def brand_compliance_node(state: JuryState, config: RunnableConfig) -> dict:
     return _run_scoring_agent(
         state, config, "brand_compliance",
-        AGENT_PERSONAS["brand_compliance"], extended_thinking=True,
+        AGENT_PERSONAS["brand_compliance"], extended_thinking=False,
     )
 
 

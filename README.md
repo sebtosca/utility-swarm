@@ -1,162 +1,360 @@
 # Creative Jury Swarm
 
-Multi-agent AI creative jury: brief + video ads → ranked verdict + self-contained HTML report.
+Multi-agent AI creative jury for evaluating video ads against a client brief, brand rules, audience fit, performance potential, and storytelling quality.
 
-*Frontier orchestration · Multimodal pipeline · Production observability*
+Creative Jury Swarm ingests a brief PDF and multiple video ads, runs a blind specialist jury, checks the agents for factual consistency, conducts a deliberation round, applies a deterministic auction score, and produces a ranked verdict with a self-contained report.
 
----
-
-## LangGraph jury flow
-
-```mermaid
-graph TD
-    A([START]) --> B[_fan_out]
-    B --> C[creative_strategist]
-    B --> D[brand_compliance]
-    B --> E[audience_psychology]
-    B --> F[performance_marketer]
-    B --> G[storytelling_critic]
-    C & D & E & F & G --> H[consistency_checker]
-    H --> I[deliberation_round]
-    I --> J{human_review_gate}
-    J -->|approved| K[moderator]
-    K --> L{confidence_gate}
-    L -->|passed| M([END])
-```
-
-Five specialist agents score in parallel — blind, so no agent can anchor on another's score.
-A Consistency Checker flags factual contradictions. A deliberation round lets each agent
-revise. The Moderator (claude-opus-4-7 with extended thinking) synthesises the record and
-delivers a ranked verdict. A pure-Python auction engine computes the final score from
-confidence × conviction bids weighted by the rubric.
+*LangGraph orchestration · Multimodal ad analysis · Auditable LLM evaluation*
 
 ---
 
-## Quick start
+## Why it exists
 
-**Docker (recommended):**
-```bash
-cp .env.example .env        # fill in ANTHROPIC_API_KEY
-docker compose up jaeger    # start OTel collector + Jaeger UI
-cjs configure
-cjs run --brief brief.pdf --videos ad1.mp4 ad2.mp4 --brand brand.yaml
-```
+Creative review is usually subjective, hard to audit, and vulnerable to the loudest opinion in the room. This project turns that process into a structured evaluation system:
 
-**Local:**
-```bash
-pip install -e .
-cjs configure
-cjs run --brief brief.pdf --videos ad1.mp4 ad2.mp4 --brand brand.yaml
-```
-
-The report opens automatically in your browser when the run completes.
+- Specialist agents score only the dimensions they own.
+- The first scoring pass is blind, so agents cannot anchor on each other.
+- A consistency checker flags contradictions before deliberation.
+- A deterministic auction formula gives the Moderator a quantitative ranking to explain.
+- Every run writes artifacts, metrics, checkpoints, and an LLM audit trail.
 
 ---
 
-## Production engineering features
+## Features
 
-| Feature | Implementation |
-|---|---|
-| **Parallel scoring** | LangGraph `Send` API fans out to 5 agents simultaneously |
-| **Checkpointing** | `SqliteSaver` — resume any interrupted run with `cjs resume <run_id>` |
-| **Human-in-the-loop** | `human_review_gate_node` pauses when score delta > 3 or flags unresolved |
-| **Circuit breaker** | `ModelRouter` opens after 5 failures; falls back to `claude-haiku-4-5` |
-| **Retry with backoff** | `tenacity` exponential backoff on all LLM calls |
-| **Extended thinking** | Moderator + Brand Compliance use `claude-opus-4-7` thinking budget |
-| **Audit trail** | Every LLM call logged to `audit.jsonl`: model, tokens, latency, prompt hash |
-| **Consistency checking** | Dedicated node flags factual contradictions and score/narrative drift |
-| **Confidence gate** | Advisory (default) or blocking (`--strict-confidence`) after verdict |
-| **Config snapshot** | `config_snapshot.yaml` written to every run folder at start |
-
----
-
-## Observability stack
-
-```
-cjs run
-  │
-  ├─► OTel spans ──► OTLP gRPC ──► Jaeger  (localhost:16686)
-  │
-  ├─► LangSmith traces (optional — set LANGCHAIN_TRACING_V2=true)
-  │     └─► run URL written to results/metrics.json
-  │
-  ├─► structlog JSON ──► stdout / log aggregator
-  │
-  └─► audit.jsonl ──► cjs audit <run_id>   (Rich table)
-```
-
-Start Jaeger locally: `docker compose up jaeger` then open `http://localhost:16686`.
-
----
-
-## Commands
-
-| Command | Description |
-|---|---|
-| `cjs configure` | One-time config (provider, models, limits) |
-| `cjs run` | Run the jury: `--brief`, `--videos`, `--brand`, optional `--strict-confidence` |
-| `cjs resume <run_id>` | Resume from last LangGraph checkpoint |
-| `cjs audit <run_id>` | Show LLM call audit trail as a Rich table |
-| `cjs runs` | List run folders (newest first) |
-| `cjs report <run_id>` | Show report path for a run |
-| `cjs config get [key]` | Read full config or a dot-path value |
-| `cjs config set <key> <value>` | Update a config value |
-| `cjs brand init --brief brief.pdf` | Generate starter brand YAML from a brief |
-| `cjs doctor` | Environment checks (Python, ffmpeg, API key, runs dir) |
-| `cjs models` | Show configured text/vision models |
-
----
-
-## Run output
-
-```
-runs/<timestamp>/
-  config_snapshot.yaml        # config at time of run
-  brief/
-    brief.json                # parsed brief
-    rubric.json               # scoring dimensions + weights
-    brand_rules.json          # mandatory / forbidden elements
-  videos/
-    ad1.mp4                   # copy of input
-  video_dossiers/
-    ad1_dossier.json          # transcript, scene metadata, logo timing, CTA
-  checkpoints.db              # LangGraph SQLite checkpoint
-  escalations.jsonl           # human review and confidence gate events
-  audit.jsonl                 # one line per LLM call
-  results/
-    scorecards.json           # auction scores per agent per video
-    verdict.json              # winner, ranking, rationale
-    metrics.json              # token cost, latency, langsmith_url
-    report.html               # self-contained — no internet required to open
-```
-
----
-
-## Agents
-
-| Agent | Persona | Scoring dimensions | Extended thinking |
-|---|---|---|---|
-| Creative Strategist | 15-year creative director | conviction bid only | — |
-| Brand Compliance | Brand and legal specialist | `brief_compliance`, `brand_alignment` | claude-opus-4-7 |
-| Audience Psychology | Behavioural researcher | `audience_resonance`, `emotional_impact` | — |
-| Performance Marketer | Growth specialist | `message_clarity`, `performance_potential` | — |
-| Storytelling Critic | Narrative analyst | `storytelling` | — |
-
-→ [Full agent catalog, jury flow, and auction mechanics](AGENTS.md)
-
----
-
-## Tests
-
-```bash
-pytest cjs/ -v -m "not integration"   # 176 unit tests, no API calls
-pytest -m integration                  # requires ANTHROPIC_API_KEY
-```
+- **Brief ingestion**: parses a PDF brief into `brief.json`, `rubric.json`, and `brand_rules.json`.
+- **Video analysis**: extracts metadata, frames, transcript signals, CTA detection, logo timing, and scene notes.
+- **Parallel jury pass**: runs five specialist agents concurrently through LangGraph.
+- **Consistency checking**: detects factual contradictions and score/narrative mismatches.
+- **Deliberation round**: lets agents revise after seeing group scores and consistency flags.
+- **Auction ranking**: computes `confidence_bid × conviction_bid / 100` for an auditable quantitative result.
+- **Moderator verdict**: produces ranked recommendations, per-video summaries, and unresolved concerns.
+- **Reports and UI**: writes a self-contained report and includes a live FastAPI jury room.
+- **Production controls**: checkpoint resume, retries, circuit breaker fallback, config snapshots, OTel tracing, optional LangSmith traces, and JSON audit logs.
 
 ---
 
 ## Architecture
 
-→ [Engineering philosophy and design decisions](SOUL.md)  
-→ [Component interfaces, storage layout, extension points](ARCHITECTURE.md)  
-→ [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+```mermaid
+graph TD
+    A[Brief PDF + Video files] --> B[BriefIngest]
+    B --> C[VideoAnalysis per video]
+    C --> D[_fan_out]
+    D --> E[Creative Strategist]
+    D --> F[Brand Compliance]
+    D --> G[Audience Psychology]
+    D --> H[Performance Marketer]
+    D --> I[Storytelling Critic]
+    E & F & G & H & I --> J[ConsistencyChecker]
+    J --> K[Deliberation Round]
+    K --> L[Human Review Gate]
+    L --> M[Moderator]
+    M --> N[Confidence Gate]
+    N --> O[report.html + run artifacts]
+```
+
+Five specialist agents score in parallel during the blind pass. The Consistency Checker audits their claims against the video dossier and their own scores. The Moderator reads the full jury record, uses the auction result as the primary quantitative signal, and writes the final client-facing verdict.
+
+Full agent behavior lives in [AGENTS.md](AGENTS.md), with complete system prompts in [docs/agent_system_prompts.md](docs/agent_system_prompts.md).
+
+---
+
+## Tech stack
+
+- **Python 3.10+**
+- **Typer** and **Rich** for the CLI
+- **LangGraph** with SQLite checkpointing for orchestration and resume
+- **Anthropic Claude** for text, vision, and extended-thinking calls
+- **Pydantic** for schema contracts
+- **PyMuPDF**, **ffmpeg**, and optional **Whisper** for brief/video processing
+- **FastAPI**, **Uvicorn**, and WebSockets for the jury room UI
+- **OpenTelemetry**, **Jaeger**, **LangSmith**, and **structlog** for observability
+- **pytest**, **ruff**, and **mypy** for test and quality tooling
+
+---
+
+## How to run
+
+There are two ways to use Creative Jury Swarm. Start with the UI if you want a guided, non-technical workflow. Use the terminal if you want repeatable commands, automation, or tighter control over outputs.
+
+### 1. Install
+
+```bash
+git clone <repo-url>
+cd creative-jury-swarm
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+You also need `ffmpeg` on your `PATH` for video processing.
+
+### 2. Configure once
+
+```bash
+export ANTHROPIC_API_KEY=<your-key>
+cjs configure
+cjs doctor
+```
+
+For a non-interactive setup:
+
+```bash
+cjs configure --non-interactive --provider anthropic --out-dir ./runs
+```
+
+### Approach 1: Easy UI
+
+Best for non-technical users, client reviews, and anyone who wants to upload files from a browser.
+
+```bash
+cjs ui
+```
+
+Then open `http://127.0.0.1:8000` if the browser does not open automatically.
+
+In the UI:
+
+1. Upload the brief PDF.
+2. Upload two or more video ads.
+3. Optionally upload a brand YAML.
+4. Start the jury run.
+5. Watch progress live and open the final report when the run completes.
+
+The UI runs locally on your machine. Outputs are still written to `runs/<run_id>/`.
+
+### Approach 2: Power-user terminal
+
+Best for developers, repeatable evaluations, CI jobs, and anyone who wants exact command history.
+
+Create or review a brand file:
+
+```bash
+cjs brand init --brief brief.pdf --out brand.yaml
+```
+
+Review the generated YAML before using it in a run.
+
+Run the jury:
+
+```bash
+cjs run --brief brief.pdf --videos ad1.mp4 --videos ad2.mp4 --brand brand.yaml
+```
+
+Useful terminal options:
+
+```bash
+cjs run --brief brief.pdf --videos ad1.mp4 --videos ad2.mp4 --brand brand.yaml --auto-approve
+cjs run --brief brief.pdf --videos ad1.mp4 --videos ad2.mp4 --brand brand.yaml --strict-confidence
+cjs --json run --brief brief.pdf --videos ad1.mp4 --videos ad2.mp4 --brand brand.yaml
+```
+
+The run writes artifacts to `runs/<run_id>/` and opens the report when complete.
+
+---
+
+## Docker
+
+Start Jaeger for local traces:
+
+```bash
+docker compose up jaeger
+```
+
+Run the CLI in the app container:
+
+```bash
+ANTHROPIC_API_KEY=<your-key> docker compose run --rm \
+  --volume "$PWD:/work" \
+  --workdir /work \
+  app run \
+    --brief brief.pdf \
+    --videos ad1.mp4 \
+    --videos ad2.mp4 \
+    --brand brand.yaml
+```
+
+Jaeger is available at `http://localhost:16686`.
+
+---
+
+## CLI commands
+
+| Command | Description |
+|---|---|
+| `cjs configure` | Create or update `~/.cjs/config.yaml` |
+| `cjs doctor` | Check Python, ffmpeg, Whisper, config, API key, and run directory |
+| `cjs brand init --brief brief.pdf` | Generate a starter brand YAML |
+| `cjs run --brief ... --videos ... --brand ...` | Run the full jury pipeline |
+| `cjs resume <run_id>` | Resume from the last LangGraph checkpoint |
+| `cjs ui` | Launch the live jury room web UI |
+| `cjs runs` | List previous run IDs |
+| `cjs report <run_id>` | Print the report path for a run |
+| `cjs audit <run_id>` | Show the LLM audit trail as a Rich table |
+| `cjs models` | Show configured text and vision models |
+| `cjs config get [key]` | Read all config or a dot-path value |
+| `cjs config set <key> <value>` | Update a dot-path config value |
+
+Most commands support machine-readable output through the root `--json` flag:
+
+```bash
+cjs --json runs
+```
+
+---
+
+## Configuration
+
+Configuration is stored in `~/.cjs/config.yaml`.
+
+```yaml
+provider: anthropic
+models:
+  text: claude-sonnet-4-6
+  vision: claude-sonnet-4-6
+  extended_thinking: claude-opus-4-7
+auth:
+  api_key_env: ANTHROPIC_API_KEY
+limits:
+  max_videos: 3
+  max_duration_sec: 120
+  max_frames: 12
+  max_pdf_pages: 20
+  max_file_mb: 200
+run:
+  out_dir: ./runs
+```
+
+Optional observability environment variables:
+
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+export LANGCHAIN_TRACING_V2=true
+export LANGCHAIN_API_KEY=<your-langsmith-key>
+export LANGCHAIN_PROJECT=creative-jury-swarm
+```
+
+---
+
+## Run output
+
+```text
+runs/<run_id>/
+  input/
+    brief.pdf
+    videos/
+      ad1.mp4
+  brief/
+    brief_raw.txt
+    brief.json
+    rubric.json
+    brand_rules.json
+  dossiers/
+    ad1_dossier.json
+  judgements/
+    ad1_creative_strategist.json
+    ad1_brand_compliance.json
+  results/
+    consistency_flags.json
+    scorecards.json
+    verdict.json
+    metrics.json
+    report.html
+  audit.jsonl
+  escalations.jsonl
+  checkpoints.db
+  config_snapshot.yaml
+```
+
+The report is self-contained and can be opened without an internet connection.
+
+---
+
+## Agent jury
+
+| Agent | Role | Scoring dimensions | Extended thinking |
+|---|---|---|---|
+| Creative Strategist | Evaluates the creative idea and craft | Conviction bid only | No |
+| Brand Compliance | Audits mandatory elements, claims, risk, and logo timing | `brief_compliance`, `brand_alignment` | Yes |
+| Audience Psychology | Judges audience resonance and emotional fit | `audience_resonance`, `emotional_impact` | No |
+| Performance Marketer | Reviews hook, CTA, value proposition, and platform fit | `message_clarity`, `performance_potential` | No |
+| Storytelling Critic | Evaluates arc, pacing, payoff, and narrative coherence | `storytelling` | No |
+| Consistency Checker | Flags contradictions and score/narrative drift | None | No |
+| Moderator | Chairs the verdict and final ranking | None | Yes |
+
+---
+
+## Observability and auditability
+
+```text
+cjs run
+  ├─ OTel spans -> OTLP gRPC -> Jaeger
+  ├─ optional LangSmith traces -> results/metrics.json
+  ├─ structlog JSON -> stdout or log aggregator
+  └─ audit.jsonl -> cjs audit <run_id>
+```
+
+Each LLM audit entry records model, node, agent, token counts, latency, error state, and a SHA-256 prompt hash. Raw prompt text is not stored in the audit log.
+
+---
+
+## Project structure
+
+```text
+creative-jury-swarm/
+  cjs/
+    auction/          # deterministic auction engine
+    escalation/       # human review and confidence gates
+    graph/            # LangGraph state, nodes, and jury DAG
+    observability/    # tracing, logging, LangSmith, audit trail
+    pipelines/        # brief ingestion and video analysis
+    report/           # report builder and HTML template
+    router/           # model routing, retry, circuit breaker
+    schemas/          # Pydantic contracts
+    storage/          # run folders and SQLite index helpers
+    ui/               # FastAPI jury room
+    tests/            # unit and integration tests
+  docs/
+    agent_system_prompts.md
+    production_build_plan.md
+  ARCHITECTURE.md
+  AGENTS.md
+  SECURITY.md
+```
+
+---
+
+## Testing
+
+```bash
+pytest cjs/ -v -m "not integration"
+pytest -m integration
+ruff check .
+mypy cjs
+```
+
+Integration tests require `ANTHROPIC_API_KEY`.
+
+---
+
+## Security and privacy
+
+- API keys are read from environment variables named in `~/.cjs/config.yaml`.
+- Briefs and videos are copied into the local run folder.
+- ffmpeg and Whisper processing run locally.
+- Frames, transcripts, and structured prompts are sent directly to the configured model provider.
+- Audit logs store prompt hashes instead of raw prompt text.
+- Run outputs are ignored by git by default.
+
+See [SECURITY.md](SECURITY.md) for details.
+
+---
+
+## Further reading
+
+- [AGENTS.md](AGENTS.md): jury flow, agent catalog, scoring dimensions, and auction mechanics
+- [ARCHITECTURE.md](ARCHITECTURE.md): component design, storage layout, and extension points
+- [SOUL.md](SOUL.md): engineering philosophy and design decisions
+- [CONTRIBUTING.md](CONTRIBUTING.md): development workflow
+- [CHANGELOG.md](CHANGELOG.md): notable changes

@@ -78,12 +78,10 @@ python -c "from langgraph.graph import StateGraph; from langgraph.checkpoint.sql
 
 Expected: `ok`
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Suggest commit to user**
 
-```bash
-git add pyproject.toml
-git commit -m "deps: add langgraph, langgraph-checkpoint-sqlite, langchain-core"
-```
+> When ready, commit with:
+> `git add pyproject.toml && git commit -m "deps: add langgraph, langgraph-checkpoint-sqlite, langchain-core"`
 
 ---
 
@@ -182,12 +180,10 @@ pytest cjs/tests/test_verdict_schema.py -v
 
 Expected: 3 PASSED.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Suggest commit to user**
 
-```bash
-git add cjs/schemas/verdict.py cjs/schemas/__init__.py cjs/tests/test_verdict_schema.py
-git commit -m "feat: add Verdict schema"
-```
+> When ready, commit with:
+> `git add cjs/schemas/verdict.py cjs/schemas/__init__.py cjs/tests/test_verdict_schema.py && git commit -m "feat: add Verdict schema"`
 
 ---
 
@@ -283,12 +279,10 @@ pytest cjs/tests/test_jury_state.py -v
 
 Expected: 3 PASSED.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Suggest commit to user**
 
-```bash
-git add cjs/graph/__init__.py cjs/graph/state.py cjs/graph/nodes/__init__.py cjs/tests/test_jury_state.py
-git commit -m "feat: add JuryState TypedDict and _merge_dicts reducer"
-```
+> When ready, commit with:
+> `git add cjs/graph/__init__.py cjs/graph/state.py cjs/graph/nodes/__init__.py cjs/tests/test_jury_state.py && git commit -m "feat: add JuryState TypedDict and _merge_dicts reducer"`
 
 ---
 
@@ -628,12 +622,10 @@ pytest cjs/tests/test_scoring_node.py -v
 
 Expected: 6 PASSED.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Suggest commit to user**
 
-```bash
-git add cjs/graph/nodes/scoring.py cjs/tests/test_scoring_node.py
-git commit -m "feat: add _run_scoring_agent helper with conviction normalisation"
-```
+> When ready, commit with:
+> `git add cjs/graph/nodes/scoring.py cjs/tests/test_scoring_node.py && git commit -m "feat: add _run_scoring_agent helper with conviction normalisation"`
 
 ---
 
@@ -753,12 +745,10 @@ pytest cjs/tests/test_scoring_node.py -v
 
 Expected: all PASSED (6 original + 3 new).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Suggest commit to user**
 
-```bash
-git add cjs/graph/nodes/scoring.py cjs/tests/test_scoring_node.py
-git commit -m "feat: add five jury agent node functions"
-```
+> When ready, commit with:
+> `git add cjs/graph/nodes/scoring.py cjs/tests/test_scoring_node.py && git commit -m "feat: add five jury agent node functions"`
 
 ---
 
@@ -943,12 +933,10 @@ pytest cjs/tests/test_consistency_node.py -v
 
 Expected: 3 PASSED.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Suggest commit to user**
 
-```bash
-git add cjs/graph/nodes/consistency.py cjs/tests/test_consistency_node.py
-git commit -m "feat: add ConsistencyChecker node"
-```
+> When ready, commit with:
+> `git add cjs/graph/nodes/consistency.py cjs/tests/test_consistency_node.py && git commit -m "feat: add ConsistencyChecker node"`
 
 ---
 
@@ -1168,12 +1156,10 @@ pytest cjs/tests/test_deliberation_node.py -v
 
 Expected: 4 PASSED.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Suggest commit to user**
 
-```bash
-git add cjs/graph/nodes/deliberation.py cjs/tests/test_deliberation_node.py
-git commit -m "feat: add deliberation round node"
-```
+> When ready, commit with:
+> `git add cjs/graph/nodes/deliberation.py cjs/tests/test_deliberation_node.py && git commit -m "feat: add deliberation round node"`
 
 ---
 
@@ -1374,12 +1360,10 @@ pytest cjs/tests/test_moderator_node.py -v
 
 Expected: 3 PASSED.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Suggest commit to user**
 
-```bash
-git add cjs/graph/nodes/moderator.py cjs/tests/test_moderator_node.py
-git commit -m "feat: add Moderator node with extended thinking"
-```
+> When ready, commit with:
+> `git add cjs/graph/nodes/moderator.py cjs/tests/test_moderator_node.py && git commit -m "feat: add Moderator node with extended thinking"`
 
 ---
 
@@ -1650,12 +1634,10 @@ pytest cjs/tests/test_resume.py -v
 
 Expected: 1 PASSED.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: Suggest commit to user**
 
-```bash
-git add cjs/graph/jury_graph.py cjs/tests/test_jury_graph.py cjs/tests/test_resume.py
-git commit -m "feat: add jury_graph with Send-based fan-out and SqliteSaver checkpointing"
-```
+> When ready, commit with:
+> `git add cjs/graph/jury_graph.py cjs/tests/test_jury_graph.py cjs/tests/test_resume.py && git commit -m "feat: add jury_graph with Send-based fan-out and SqliteSaver checkpointing"`
 
 ---
 
@@ -1866,12 +1848,10 @@ pytest cjs/ -v -m "not integration"
 
 Expected: all PASSED (no regressions).
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: Suggest commit to user**
 
-```bash
-git add cjs/cli.py cjs/tests/test_cli_commands.py
-git commit -m "feat: wire jury graph into cjs run and add cjs resume command"
-```
+> When ready, commit with:
+> `git add cjs/cli.py cjs/tests/test_cli_commands.py && git commit -m "feat: wire jury graph into cjs run and add cjs resume command"`
 
 ---
 
@@ -2010,12 +1990,10 @@ def test_full_jury_swarm_produces_verdict():
         assert len(verdict.ranking) == 2
 ```
 
-- [ ] **Step 2: Commit (do not run — requires live API key)**
+- [ ] **Step 2: Suggest commit to user (do not run — requires live API key)**
 
-```bash
-git add cjs/tests/test_jury_graph_integration.py
-git commit -m "test: add Phase 11 integration test for full jury swarm"
-```
+> When ready, commit with:
+> `git add cjs/tests/test_jury_graph_integration.py && git commit -m "test: add Phase 11 integration test for full jury swarm"`
 
 ---
 

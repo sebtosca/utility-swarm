@@ -36,6 +36,8 @@ env/
 # Env and secrets
 .env
 .env.local
+.env.*
+!.env.example
 *.pem
 
 # CJS local config (lives at ~/.cjs/config.yaml but guarded here as a safety net)
@@ -49,3 +51,8 @@ my_runs/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+CLAUDE.md
+SOUL.md
+HANDOFF.md
+AGENTS.md
+.claude/

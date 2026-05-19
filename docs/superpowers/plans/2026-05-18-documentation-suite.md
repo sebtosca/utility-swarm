@@ -143,12 +143,10 @@ Verify the file contains:
 - [ ] Code standards: Ruff, mypy, no nested if/else, no comments unless WHY
 - [ ] Testing commands with integration marker guidance
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Suggest commit to user**
 
-```bash
-git add CLAUDE.md
-git commit -m "docs: add CLAUDE.md with locked architecture, agent roster, and module map"
-```
+> When ready, commit with:
+> `git add CLAUDE.md && git commit -m "docs: add CLAUDE.md with locked architecture, agent roster, and module map"`
 
 ---
 
@@ -340,12 +338,10 @@ Verify the file contains:
 - [ ] Consistency Checker: both flag types with examples
 - [ ] Link to `docs/agent_system_prompts.md`
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Suggest commit to user**
 
-```bash
-git add AGENTS.md
-git commit -m "docs: add AGENTS.md with full jury flow, agent catalog, and auction mechanics"
-```
+> When ready, commit with:
+> `git add AGENTS.md && git commit -m "docs: add AGENTS.md with full jury flow, agent catalog, and auction mechanics"`
 
 ---
 
@@ -438,12 +434,10 @@ Verify:
 - [ ] "What this is not" — explicitly not a prompt wrapper
 - [ ] Status with v1/v2 scope and link to BUILD_STEPS.md
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Suggest commit to user**
 
-```bash
-git add SOUL.md
-git commit -m "docs: add SOUL.md with engineering vision and design philosophy"
-```
+> When ready, commit with:
+> `git add SOUL.md && git commit -m "docs: add SOUL.md with engineering vision and design philosophy"`
 
 ---
 
@@ -597,12 +591,10 @@ Verify:
 - [ ] Output tree includes `consistency_flags.json` and `audit.jsonl`
 - [ ] Footer links to AGENTS.md, SOUL.md, CONTRIBUTING.md, SECURITY.md
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Suggest commit to user**
 
-```bash
-git add README.md
-git commit -m "docs: overhaul README with unified narrative hub and three-pillar architecture"
-```
+> When ready, commit with:
+> `git add README.md && git commit -m "docs: overhaul README with unified narrative hub and three-pillar architecture"`
 
 ---
 
@@ -680,12 +672,10 @@ Verify:
 - [ ] In scope list includes UI improvements
 - [ ] Out of scope references CLAUDE.md and names the four locked decisions
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Suggest commit to user**
 
-```bash
-git add CONTRIBUTING.md
-git commit -m "docs: add CONTRIBUTING.md with project-specific contributor guide"
-```
+> When ready, commit with:
+> `git add CONTRIBUTING.md && git commit -m "docs: add CONTRIBUTING.md with project-specific contributor guide"`
 
 ---
 
@@ -734,12 +724,10 @@ Verify:
 - [ ] Audit trail: SHA-256 hash, not raw prompt text
 - [ ] Vulnerability reporting: GitHub issue, 48-hour acknowledgement, no public disclosure before fix
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Suggest commit to user**
 
-```bash
-git add SECURITY.md
-git commit -m "docs: add SECURITY.md with API key policy, local-only data, and audit trail"
-```
+> When ready, commit with:
+> `git add SECURITY.md && git commit -m "docs: add SECURITY.md with API key policy, local-only data, and audit trail"`
 
 ---
 

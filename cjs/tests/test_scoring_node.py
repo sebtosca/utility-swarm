@@ -141,7 +141,7 @@ def test_creative_strategist_node_calls_helper():
     router.call_structured.assert_called_once()
 
 
-def test_brand_compliance_node_uses_extended_thinking():
+def test_brand_compliance_node_uses_call_structured():
     bc_response = {
         "judgements": [{**VALID_SCORING_RESPONSE["judgements"][0], "agent_name": "brand_compliance"}],
         "conviction_allocation": {"ad1.mp4": 100},
@@ -150,7 +150,8 @@ def test_brand_compliance_node_uses_extended_thinking():
     config = {"configurable": {"router": router}}
     result = brand_compliance_node(MINIMAL_STATE, config)
     assert "brand_compliance" in result["initial_judgements"]
-    router.call_extended_thinking.assert_called_once()
+    router.call_structured.assert_called_once()
+    router.call_extended_thinking.assert_not_called()
 
 
 def test_all_five_agent_nodes_exist_and_return_correct_key():
