@@ -56,7 +56,7 @@ graph TD
 
 Five specialist agents score in parallel during the blind pass. The Consistency Checker audits their claims against the video dossier and their own scores. The Moderator reads the full jury record, uses the auction result as the primary quantitative signal, and writes the final client-facing verdict.
 
-Full agent behavior lives in [AGENTS.md](AGENTS.md), with complete system prompts in [docs/agent_system_prompts.md](docs/agent_system_prompts.md).
+Complete system prompts for the jury agents live in [docs/agent_system_prompts.md](docs/agent_system_prompts.md).
 
 ---
 
@@ -319,7 +319,6 @@ creative-jury-swarm/
     agent_system_prompts.md
     production_build_plan.md
   ARCHITECTURE.md
-  AGENTS.md
   SECURITY.md
 ```
 
@@ -353,8 +352,6 @@ See [SECURITY.md](SECURITY.md) for details.
 
 ## Further reading
 
-- [AGENTS.md](AGENTS.md): jury flow, agent catalog, scoring dimensions, and auction mechanics
 - [ARCHITECTURE.md](ARCHITECTURE.md): component design, storage layout, and extension points
-- [SOUL.md](SOUL.md): engineering philosophy and design decisions
 - [CONTRIBUTING.md](CONTRIBUTING.md): development workflow
 - [CHANGELOG.md](CHANGELOG.md): notable changes
