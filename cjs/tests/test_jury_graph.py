@@ -1,9 +1,10 @@
-import pytest
-from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.memory import MemorySaver
+from typing import Any
 
-from cjs.graph.state import JuryState, _merge_dicts
-from cjs.graph.jury_graph import build_jury_graph, _fan_out
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, START, StateGraph
+
+from cjs.graph.jury_graph import _fan_out, build_jury_graph
+from cjs.graph.state import JuryState
 
 MINIMAL_STATE: JuryState = {
     "run_id": "graph_test",
@@ -29,7 +30,7 @@ MINIMAL_STATE: JuryState = {
 AGENT_NAMES = ["creative_strategist", "brand_compliance", "audience_psychology",
                "performance_marketer", "storytelling_critic"]
 
-FAKE_JUDGEMENT = {
+FAKE_JUDGEMENT: dict[str, Any] = {
     "agent_name": "placeholder", "agent_role": None, "video_path": "ad1.mp4",
     "scores": {}, "strengths": [], "weaknesses": [], "evidence": [],
     "metric_comments": {}, "confidence": 70, "token_bid": 20, "flags": [],

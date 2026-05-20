@@ -1,10 +1,12 @@
 import json
-import pytest
+from typing import Any
 from unittest.mock import MagicMock
 
-from cjs.graph.nodes.consistency import consistency_checker_node
-from cjs.router.model_router import RouterResult
+from langchain_core.runnables import RunnableConfig
 
+from cjs.graph.nodes.consistency import consistency_checker_node
+from cjs.graph.state import JuryState
+from cjs.router.model_router import RouterResult
 
 DOSSIER = {
     "video_path": "/runs/test/input/videos/ad1.mp4",
@@ -14,7 +16,7 @@ DOSSIER = {
     "cta_text": "Buy now", "frames_analyzed": 6, "metadata": {},
 }
 
-JUDGEMENT_WITH_FACTUAL_ERROR = {
+JUDGEMENT_WITH_FACTUAL_ERROR: dict[str, Any] = {
     "agent_name": "creative_strategist", "agent_role": None,
     "video_path": "ad1.mp4",
     "scores": {"storytelling": 8.0}, "strengths": [], "weaknesses": [],
@@ -24,7 +26,7 @@ JUDGEMENT_WITH_FACTUAL_ERROR = {
     "model_info": {},
 }
 
-STATE = {
+STATE: JuryState = {
     "run_id": "test", "brief": {}, "rubric": {}, "brand_rules": {},
     "video_dossiers": [DOSSIER],
     "initial_judgements": {"creative_strategist": [JUDGEMENT_WITH_FACTUAL_ERROR]},
@@ -55,7 +57,7 @@ def make_mock_router(response: dict) -> MagicMock:
 
 def test_consistency_checker_returns_report():
     router = make_mock_router(VALID_REPORT)
-    config = {"configurable": {"router": router}}
+    config: RunnableConfig = {"configurable": {"router": router}}
     result = consistency_checker_node(STATE, config)
     assert "consistency_report" in result
     report = result["consistency_report"]
@@ -65,7 +67,7 @@ def test_consistency_checker_returns_report():
 
 def test_consistency_checker_uses_call_structured():
     router = make_mock_router(VALID_REPORT)
-    config = {"configurable": {"router": router}}
+    config: RunnableConfig = {"configurable": {"router": router}}
     consistency_checker_node(STATE, config)
     router.call_structured.assert_called_once()
 
@@ -73,6 +75,6 @@ def test_consistency_checker_uses_call_structured():
 def test_consistency_checker_no_flags_when_clean():
     clean_report = {"flags": [], "checked_agents": ["creative_strategist"], "checked_videos": ["ad1.mp4"]}
     router = make_mock_router(clean_report)
-    config = {"configurable": {"router": router}}
+    config: RunnableConfig = {"configurable": {"router": router}}
     result = consistency_checker_node(STATE, config)
     assert result["consistency_report"]["flags"] == []

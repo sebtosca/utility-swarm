@@ -1,9 +1,9 @@
-import pytest
-from langgraph.graph import StateGraph, START, END
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, START, StateGraph
 
-from cjs.graph.state import JuryState
 from cjs.graph.jury_graph import _fan_out
+from cjs.graph.state import JuryState
 
 MINIMAL_STATE: JuryState = {
     "run_id": "resume_test",
@@ -52,9 +52,9 @@ def test_completed_run_is_idempotent_on_second_invoke():
 
     saver = MemorySaver()
     compiled = graph.compile(checkpointer=saver)
-    cfg = {"configurable": {"thread_id": "resume_test_thread"}}
+    cfg: RunnableConfig = {"configurable": {"thread_id": "resume_test_thread"}}
 
-    result1 = compiled.invoke(MINIMAL_STATE, config=cfg)
+    result1 = compiled.invoke(MINIMAL_STATE, config=cfg)  # type: ignore[arg-type]
     first_run_counts = dict(call_counts)
 
     # Completed run state is retrievable via get_state without re-running nodes

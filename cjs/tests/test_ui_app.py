@@ -10,7 +10,6 @@ import asyncio
 import json
 from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
 
 from cjs.config import Settings

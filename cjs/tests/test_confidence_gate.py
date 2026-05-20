@@ -1,17 +1,17 @@
 import json
-import tempfile
 from pathlib import Path
+from typing import cast
 from unittest import mock
 
 import pytest
 
 from cjs.escalation.confidence_gate import (
-    CONFIDENCE_THRESHOLD,
     LowConfidenceError,
     confidence_gate_node,
 )
+from cjs.graph.state import JuryState
 
-_BASE_STATE = {
+_BASE_STATE: JuryState = cast(JuryState, {
     "run_id": "test_run",
     "brief": {}, "rubric": {}, "brand_rules": {},
     "video_dossiers": [], "initial_judgements": {},
@@ -19,7 +19,7 @@ _BASE_STATE = {
     "verdict": {"winner_video": "ad1.mp4", "winner_rationale": "Best.",
                 "ranking": ["ad1.mp4"], "per_video_notes": {}, "confidence": 0.5,
                 "flags_resolved": []},
-}
+})
 
 
 def _make_config(tmp_path: Path, strict: bool = False):
@@ -29,7 +29,7 @@ def _make_config(tmp_path: Path, strict: bool = False):
 
 
 def test_high_confidence_passes_through(tmp_path):
-    state = {**_BASE_STATE, "verdict": {**_BASE_STATE["verdict"], "confidence": 0.9}}
+    state: JuryState = cast(JuryState, {**_BASE_STATE, "verdict": {**_BASE_STATE["verdict"], "confidence": 0.9}})  # type: ignore[dict-item]
     result = confidence_gate_node(state, _make_config(tmp_path))
     assert result == {}
     assert not (tmp_path / "metrics.json").exists()

@@ -13,7 +13,6 @@ from fastapi.responses import FileResponse, HTMLResponse
 from cjs.config import Settings, load_config
 from cjs.storage.runs import create_run_folder, get_runs_dir
 
-
 # ---------------------------------------------------------------------------
 # Thread → asyncio event bridge
 # ---------------------------------------------------------------------------
@@ -126,27 +125,28 @@ def _jury_thread(
             "verdict": None,
         }
         checkpoints_db = run_folder / "checkpoints.db"
-        saver = SqliteSaver.from_conn_string(str(checkpoints_db))
-        compiled = build_jury_graph().compile(checkpointer=saver)
-        thread_config = {
-            "configurable": {
-                "thread_id": run_id,
-                "router": router,
-                "strict_confidence": False,
-                "auto_approve": True,
+        with SqliteSaver.from_conn_string(str(checkpoints_db)) as saver:
+            from langchain_core.runnables import RunnableConfig
+            compiled = build_jury_graph().compile(checkpointer=saver)
+            thread_config: RunnableConfig = {
+                "configurable": {
+                    "thread_id": run_id,
+                    "router": router,
+                    "strict_confidence": False,
+                    "auto_approve": True,
+                }
             }
-        }
 
-        for chunk in compiled.stream(initial_state, thread_config):
-            for node_name, update in chunk.items():
-                _put_event(app, run_id, {
-                    "type": "node_complete",
-                    "node": node_name,
-                    "update": _safe_update(update),
-                })
+            for chunk in compiled.stream(initial_state, thread_config):  # type: ignore[arg-type]
+                for node_name, update in chunk.items():
+                    _put_event(app, run_id, {
+                        "type": "node_complete",
+                        "node": node_name,
+                        "update": _safe_update(update),
+                    })
 
-        snap = compiled.get_state(thread_config)
-        final_state = snap.values
+            snap = compiled.get_state(thread_config)  # type: ignore[arg-type]
+            final_state: JuryState = snap.values  # type: ignore[assignment]
 
         # --- Auction + report ---
         _put_event(app, run_id, {"type": "node_start", "node": "auction"})
@@ -177,7 +177,9 @@ def create_app(config_override: Settings | None = None) -> FastAPI:
     def _get_config() -> Settings:
         if _config_holder[0] is None:
             _config_holder[0] = load_config() or Settings()
-        return _config_holder[0]
+        result = _config_holder[0]
+        assert result is not None
+        return result
 
     @asynccontextmanager
     async def _lifespan(app: FastAPI):

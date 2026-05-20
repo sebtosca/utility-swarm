@@ -8,6 +8,7 @@ from cjs.observability.logging import get_logger
 
 if TYPE_CHECKING:
     from langchain_core.runnables import RunnableConfig
+
     from cjs.graph.state import JuryState
 
 logger = get_logger(__name__)

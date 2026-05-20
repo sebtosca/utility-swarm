@@ -2,6 +2,7 @@ import json
 from unittest.mock import MagicMock
 
 import pytest
+from langchain_core.runnables import RunnableConfig
 
 from cjs.graph.nodes.scoring import (
     AgentScoringError,
@@ -78,36 +79,36 @@ def make_mock_router(response_dict: dict) -> MagicMock:
 
 def test_run_scoring_agent_returns_initial_judgements():
     router = make_mock_router(VALID_SCORING_RESPONSE)
-    config = {"configurable": {"router": router}}
+    config: RunnableConfig = {"configurable": {"router": router}}
     result = _run_scoring_agent(MINIMAL_STATE, config, "creative_strategist", "You are a CD.", extended_thinking=False)
     assert "initial_judgements" in result
     assert "creative_strategist" in result["initial_judgements"]
-    assert len(result["initial_judgements"]["creative_strategist"]) == 1
+    assert len(result["initial_judgements"]["creative_strategist"]) == 1  # type: ignore[index]
 
 
 def test_run_scoring_agent_populates_token_bid_from_conviction():
     router = make_mock_router(VALID_SCORING_RESPONSE)
-    config = {"configurable": {"router": router}}
+    config: RunnableConfig = {"configurable": {"router": router}}
     result = _run_scoring_agent(MINIMAL_STATE, config, "creative_strategist", "You are a CD.", extended_thinking=False)
-    judgement = result["initial_judgements"]["creative_strategist"][0]
+    judgement = result["initial_judgements"]["creative_strategist"][0]  # type: ignore[index]
     assert judgement["token_bid"] == 100
 
 
 def test_run_scoring_agent_normalises_conviction_not_summing_to_100():
     bad_response = {
-        "judgements": [VALID_SCORING_RESPONSE["judgements"][0].copy()],
+        "judgements": [VALID_SCORING_RESPONSE["judgements"][0].copy()],  # type: ignore[index]
         "conviction_allocation": {"ad1.mp4": 50},  # only 50, not 100
     }
     router = make_mock_router(bad_response)
-    config = {"configurable": {"router": router}}
+    config: RunnableConfig = {"configurable": {"router": router}}
     result = _run_scoring_agent(MINIMAL_STATE, config, "creative_strategist", "You are a CD.", extended_thinking=False)
-    judgement = result["initial_judgements"]["creative_strategist"][0]
+    judgement = result["initial_judgements"]["creative_strategist"][0]  # type: ignore[index]
     assert judgement["token_bid"] == 100  # normalised: 50/50 * 100
 
 
 def test_run_scoring_agent_uses_call_structured_for_regular_agents():
     router = make_mock_router(VALID_SCORING_RESPONSE)
-    config = {"configurable": {"router": router}}
+    config: RunnableConfig = {"configurable": {"router": router}}
     _run_scoring_agent(MINIMAL_STATE, config, "creative_strategist", "You are a CD.", extended_thinking=False)
     router.call_structured.assert_called_once()
     router.call_extended_thinking.assert_not_called()
@@ -115,7 +116,7 @@ def test_run_scoring_agent_uses_call_structured_for_regular_agents():
 
 def test_run_scoring_agent_uses_extended_thinking_for_brand_compliance():
     router = make_mock_router(VALID_SCORING_RESPONSE)
-    config = {"configurable": {"router": router}}
+    config: RunnableConfig = {"configurable": {"router": router}}
     _run_scoring_agent(MINIMAL_STATE, config, "brand_compliance", "You are BC.", extended_thinking=True)
     router.call_extended_thinking.assert_called_once()
     router.call_structured.assert_not_called()
@@ -128,14 +129,14 @@ def test_run_scoring_agent_raises_on_invalid_json():
         content="not valid json {{{{",
         tokens_in=10, tokens_out=10, latency_ms=0.0, model="claude-sonnet-4-6",
     )
-    config = {"configurable": {"router": router}}
+    config: RunnableConfig = {"configurable": {"router": router}}
     with pytest.raises(AgentScoringError):
         _run_scoring_agent(MINIMAL_STATE, config, "creative_strategist", "You are a CD.", extended_thinking=False)
 
 
 def test_creative_strategist_node_calls_helper():
     router = make_mock_router(VALID_SCORING_RESPONSE)
-    config = {"configurable": {"router": router}}
+    config: RunnableConfig = {"configurable": {"router": router}}
     result = creative_strategist_node(MINIMAL_STATE, config)
     assert "creative_strategist" in result["initial_judgements"]
     router.call_structured.assert_called_once()
@@ -143,11 +144,11 @@ def test_creative_strategist_node_calls_helper():
 
 def test_brand_compliance_node_uses_call_structured():
     bc_response = {
-        "judgements": [{**VALID_SCORING_RESPONSE["judgements"][0], "agent_name": "brand_compliance"}],
+        "judgements": [{**VALID_SCORING_RESPONSE["judgements"][0], "agent_name": "brand_compliance"}],  # type: ignore[index]
         "conviction_allocation": {"ad1.mp4": 100},
     }
     router = make_mock_router(bc_response)
-    config = {"configurable": {"router": router}}
+    config: RunnableConfig = {"configurable": {"router": router}}
     result = brand_compliance_node(MINIMAL_STATE, config)
     assert "brand_compliance" in result["initial_judgements"]
     router.call_structured.assert_called_once()
@@ -163,10 +164,10 @@ def test_all_five_agent_nodes_exist_and_return_correct_key():
     ]
     for node_fn, expected_key in nodes:
         named_response = {
-            "judgements": [{**VALID_SCORING_RESPONSE["judgements"][0], "agent_name": expected_key}],
+            "judgements": [{**VALID_SCORING_RESPONSE["judgements"][0], "agent_name": expected_key}],  # type: ignore[index]
             "conviction_allocation": {"ad1.mp4": 100},
         }
         router = make_mock_router(named_response)
-        config = {"configurable": {"router": router}}
+        config: RunnableConfig = {"configurable": {"router": router}}
         result = node_fn(MINIMAL_STATE, config)
         assert expected_key in result["initial_judgements"], f"Missing key for {expected_key}"

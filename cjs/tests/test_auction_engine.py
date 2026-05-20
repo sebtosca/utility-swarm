@@ -1,14 +1,12 @@
 import json
-import tempfile
-from pathlib import Path
 
 import pytest
 
 from cjs.auction.engine import (
-    compute_final_scores,
-    select_winner,
     build_verdict,
+    compute_final_scores,
     run_auction,
+    select_winner,
 )
 
 _RUBRIC = {"weights": {"storytelling": 0.6, "message_clarity": 0.4}, "name": None,

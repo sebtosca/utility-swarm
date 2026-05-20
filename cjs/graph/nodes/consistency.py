@@ -8,6 +8,7 @@ from cjs.schemas.consistency_flag import ConsistencyReport
 
 if TYPE_CHECKING:
     from langchain_core.runnables import RunnableConfig
+
     from cjs.graph.state import JuryState
 
 _SYSTEM_PROMPT = (

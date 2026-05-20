@@ -3,14 +3,13 @@ from __future__ import annotations
 import base64
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import anthropic
 import pytest
 
 from cjs.config import Settings
 from cjs.router.model_router import CIRCUIT_THRESHOLD, FALLBACK_MODEL, ModelRouter, RouterResult
-
 
 # ---------- helpers ----------
 
@@ -76,7 +75,7 @@ def test_record_failure_increments_count(tmp_path):
 
 def test_call_text_returns_router_result(tmp_path):
     router = _make_router(tmp_path)
-    router._client.messages.create = MagicMock(return_value=_fake_response("hello"))
+    router._client.messages.create = MagicMock(return_value=_fake_response("hello"))  # type: ignore[method-assign]
     result = router.call_text(system="sys", user="hi", node="test_node")
     assert isinstance(result, RouterResult)
     assert result.content == "hello"
@@ -84,7 +83,7 @@ def test_call_text_returns_router_result(tmp_path):
 
 def test_call_text_uses_configured_text_model(tmp_path):
     router = _make_router(tmp_path)
-    router._client.messages.create = MagicMock(return_value=_fake_response())
+    router._client.messages.create = MagicMock(return_value=_fake_response())  # type: ignore[method-assign]
     router.call_text(system="s", user="u", node="n")
     kwargs = router._client.messages.create.call_args.kwargs
     assert kwargs["model"] == router._config.models.text
@@ -92,7 +91,7 @@ def test_call_text_uses_configured_text_model(tmp_path):
 
 def test_call_text_writes_audit_entry(tmp_path):
     router = _make_router(tmp_path)
-    router._client.messages.create = MagicMock(return_value=_fake_response())
+    router._client.messages.create = MagicMock(return_value=_fake_response())  # type: ignore[method-assign]
     router.call_text(system="s", user="u", node="scoring", agent="creative_strategist")
     audit_path = tmp_path / "audit.jsonl"
     assert audit_path.exists()
@@ -105,7 +104,7 @@ def test_call_text_writes_audit_entry(tmp_path):
 
 def test_call_extended_thinking_passes_thinking_flag(tmp_path):
     router = _make_router(tmp_path)
-    router._client.messages.create = MagicMock(return_value=_fake_response())
+    router._client.messages.create = MagicMock(return_value=_fake_response())  # type: ignore[method-assign]
     router.call_extended_thinking(system="s", user="u", node="moderator")
     kwargs = router._client.messages.create.call_args.kwargs
     assert kwargs.get("thinking", {}).get("type") == "enabled"
@@ -113,7 +112,7 @@ def test_call_extended_thinking_passes_thinking_flag(tmp_path):
 
 def test_call_extended_thinking_uses_extended_thinking_model(tmp_path):
     router = _make_router(tmp_path)
-    router._client.messages.create = MagicMock(return_value=_fake_response())
+    router._client.messages.create = MagicMock(return_value=_fake_response())  # type: ignore[method-assign]
     router.call_extended_thinking(system="s", user="u", node="moderator")
     kwargs = router._client.messages.create.call_args.kwargs
     assert kwargs["model"] == router._config.models.extended_thinking
@@ -132,7 +131,7 @@ def test_call_extended_thinking_captures_thinking_block(tmp_path):
     resp.model = "claude-opus-4-7"
     resp.usage.input_tokens = 20
     resp.usage.output_tokens = 10
-    router._client.messages.create = MagicMock(return_value=resp)
+    router._client.messages.create = MagicMock(return_value=resp)  # type: ignore[method-assign]
     result = router.call_extended_thinking(system="s", user="u", node="moderator")
     assert result.thinking == "step by step"
     assert result.content == "conclusion"
@@ -142,7 +141,7 @@ def test_call_extended_thinking_captures_thinking_block(tmp_path):
 
 def test_call_structured_builds_tool_definition(tmp_path):
     router = _make_router(tmp_path)
-    router._client.messages.create = MagicMock(return_value=_fake_response())
+    router._client.messages.create = MagicMock(return_value=_fake_response())  # type: ignore[method-assign]
     schema = {"type": "object", "properties": {"score": {"type": "number"}}}
     router.call_structured(system="s", user="u", node="n", schema=schema, schema_name="ScoreOutput")
     kwargs = router._client.messages.create.call_args.kwargs
@@ -160,7 +159,7 @@ def test_call_structured_tool_use_block_becomes_content(tmp_path):
     resp.model = "claude-sonnet-4-6"
     resp.usage.input_tokens = 10
     resp.usage.output_tokens = 5
-    router._client.messages.create = MagicMock(return_value=resp)
+    router._client.messages.create = MagicMock(return_value=resp)  # type: ignore[method-assign]
     result = router.call_structured(
         system="s", user="u", node="n",
         schema={}, schema_name="Out",
@@ -173,7 +172,7 @@ def test_call_structured_tool_use_block_becomes_content(tmp_path):
 def test_dispatch_records_failure_and_reraises(tmp_path):
     router = _make_router(tmp_path)
     preferred = router._config.models.text
-    router._client.messages.create = MagicMock(
+    router._client.messages.create = MagicMock(  # type: ignore[method-assign]
         side_effect=anthropic.APIError("boom", request=MagicMock(), body=None)
     )
     with pytest.raises(anthropic.APIError):
@@ -183,7 +182,7 @@ def test_dispatch_records_failure_and_reraises(tmp_path):
 
 def test_dispatch_writes_audit_entry_on_failure(tmp_path):
     router = _make_router(tmp_path)
-    router._client.messages.create = MagicMock(
+    router._client.messages.create = MagicMock(  # type: ignore[method-assign]
         side_effect=anthropic.APIError("boom", request=MagicMock(), body=None)
     )
     with pytest.raises(anthropic.APIError):
@@ -200,7 +199,7 @@ def test_dispatch_writes_escalation_when_circuit_open(tmp_path):
     # Force circuit open
     for _ in range(CIRCUIT_THRESHOLD):
         router._record_failure(preferred)
-    router._client.messages.create = MagicMock(return_value=_fake_response(model=FALLBACK_MODEL))
+    router._client.messages.create = MagicMock(return_value=_fake_response(model=FALLBACK_MODEL))  # type: ignore[method-assign]
     router.call_text(system="s", user="u", node="scoring")
     escalation_path = tmp_path / "escalations.jsonl"
     assert escalation_path.exists()
@@ -212,7 +211,7 @@ def test_dispatch_writes_escalation_when_circuit_open(tmp_path):
 
 def test_dispatch_does_not_write_escalation_when_preferred_used(tmp_path):
     router = _make_router(tmp_path)
-    router._client.messages.create = MagicMock(return_value=_fake_response())
+    router._client.messages.create = MagicMock(return_value=_fake_response())  # type: ignore[method-assign]
     router.call_text(system="s", user="u", node="scoring")
     escalation_path = tmp_path / "escalations.jsonl"
     assert not escalation_path.exists()
@@ -255,7 +254,7 @@ def test_call_with_retry_retries_on_api_error(tmp_path):
             raise anthropic.APIError("transient", request=MagicMock(), body=None)
         return _fake_response()
 
-    router._client.messages.create = flaky
+    router._client.messages.create = flaky  # type: ignore[method-assign]
     # Patch wait to avoid sleeping in tests
     with patch("cjs.router.model_router.wait_exponential", return_value=MagicMock(return_value=0)):
         result = router._call_with_retry(
@@ -268,7 +267,7 @@ def test_call_with_retry_retries_on_api_error(tmp_path):
 
 def test_call_with_retry_reraises_after_max_attempts(tmp_path):
     router = _make_router(tmp_path)
-    router._client.messages.create = MagicMock(
+    router._client.messages.create = MagicMock(  # type: ignore[method-assign]
         side_effect=anthropic.APIError("permanent", request=MagicMock(), body=None)
     )
     with patch("cjs.router.model_router.wait_exponential", return_value=MagicMock(return_value=0)):

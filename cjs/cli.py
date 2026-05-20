@@ -3,6 +3,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
+from typing import Any
 
 import click
 import typer
@@ -50,7 +51,7 @@ def is_json_mode(ctx: typer.Context | None) -> bool:
 
 
 # Resolve a dot-path key from a nested dictionary and return its value.
-def get_nested_value(data: dict[str, object], key_path: str) -> object:
+def get_nested_value(data: dict[str, Any], key_path: str) -> object:
     current: object = data
     for key in key_path.split("."):
         if not isinstance(current, dict) or key not in current:
@@ -60,7 +61,7 @@ def get_nested_value(data: dict[str, object], key_path: str) -> object:
 
 
 # Set a dot-path key in a nested dictionary; all intermediate keys must exist.
-def set_nested_value(data: dict[str, object], key_path: str, value: object) -> None:
+def set_nested_value(data: dict[str, Any], key_path: str, value: object) -> None:
     keys = key_path.split(".")
     current: object = data
     for key in keys[:-1]:
@@ -745,8 +746,8 @@ def run(
         console.print(f"[green]✓[/green] Video analysis complete. [dim]{len(dossiers)} dossier(s) written.[/dim]")
 
     # --- Phase 11: LangGraph jury swarm ---
-    import json as _json
     from langgraph.checkpoint.sqlite import SqliteSaver
+
     from cjs.graph.jury_graph import build_jury_graph
     from cjs.graph.state import JuryState
 
@@ -766,42 +767,43 @@ def run(
     }
 
     checkpoints_db = run_folder / "checkpoints.db"
-    saver = SqliteSaver.from_conn_string(str(checkpoints_db))
-    compiled = build_jury_graph().compile(checkpointer=saver)
-    thread_config = {"configurable": {"thread_id": run_id, "router": router, "strict_confidence": strict_confidence, "auto_approve": auto_approve}}
 
-    from cjs.escalation.human_review import HumanReviewRejectedError
     from cjs.escalation.confidence_gate import LowConfidenceError
+    from cjs.escalation.human_review import HumanReviewRejectedError
     from cjs.observability.langsmith import invoke_with_tracing, write_langsmith_url
-    try:
-        if not json_mode:
-            with console.status("[cyan]Running jury swarm (parallel scoring → deliberation → verdict)…"):
+
+    with SqliteSaver.from_conn_string(str(checkpoints_db)) as saver:
+        compiled = build_jury_graph().compile(checkpointer=saver)
+        thread_config = {"configurable": {"thread_id": run_id, "router": router, "strict_confidence": strict_confidence, "auto_approve": auto_approve}}
+        try:
+            if not json_mode:
+                with console.status("[cyan]Running jury swarm (parallel scoring → deliberation → verdict)…"):
+                    final_state, langsmith_url = invoke_with_tracing(
+                        compiled, initial_jury_state, thread_config, run_id, len(videos)
+                    )
+            else:
                 final_state, langsmith_url = invoke_with_tracing(
                     compiled, initial_jury_state, thread_config, run_id, len(videos)
                 )
-        else:
-            final_state, langsmith_url = invoke_with_tracing(
-                compiled, initial_jury_state, thread_config, run_id, len(videos)
-            )
-    except HumanReviewRejectedError:
-        if json_mode:
-            output_result({"status": "paused", "run_id": run_id,
-                           "reason": "human_review_rejected"}, json_mode=True)
-        else:
-            console.print(f"[yellow]⚠ Run paused at human review gate.[/yellow] Resume with: cjs resume {run_id}")
-        raise typer.Exit(0)
-    except LowConfidenceError as exc:
-        if json_mode:
-            output_result({"status": "error", "run_id": run_id, "error": str(exc)}, json_mode=True)
-        else:
-            console.print(f"[bold red]✗ Low confidence:[/bold red] {exc}")
-        raise typer.Exit(1)
-    except Exception as exc:
-        if json_mode:
-            output_result({"status": "error", "run_id": run_id, "error": str(exc)}, json_mode=True)
-        else:
-            console.print(f"[bold red]✗ Jury swarm failed:[/bold red] {exc}")
-        raise typer.Exit(1)
+        except HumanReviewRejectedError:
+            if json_mode:
+                output_result({"status": "paused", "run_id": run_id,
+                               "reason": "human_review_rejected"}, json_mode=True)
+            else:
+                console.print(f"[yellow]⚠ Run paused at human review gate.[/yellow] Resume with: cjs resume {run_id}")
+            raise typer.Exit(0)
+        except LowConfidenceError as exc:
+            if json_mode:
+                output_result({"status": "error", "run_id": run_id, "error": str(exc)}, json_mode=True)
+            else:
+                console.print(f"[bold red]✗ Low confidence:[/bold red] {exc}")
+            raise typer.Exit(1)
+        except Exception as exc:
+            if json_mode:
+                output_result({"status": "error", "run_id": run_id, "error": str(exc)}, json_mode=True)
+            else:
+                console.print(f"[bold red]✗ Jury swarm failed:[/bold red] {exc}")
+            raise typer.Exit(1)
 
     if not json_mode:
         console.print("[green]✓[/green] Jury complete.")
@@ -815,6 +817,7 @@ def run(
         auction_verdict = run_auction(final_state, run_folder)
 
     import webbrowser
+
     from cjs.report.builder import build_report
 
     metrics_path = run_folder / "results" / "metrics.json"
@@ -1013,11 +1016,11 @@ def resume(
     ),
 ) -> None:
     """Resume a run from its last LangGraph checkpoint."""
-    import json as _json
     from langgraph.checkpoint.sqlite import SqliteSaver
+
     from cjs.graph.jury_graph import build_jury_graph
 
-    config = load_config()
+    config = load_config() or Settings()
     run_folder = get_runs_dir(config) / run_id
 
     if not run_folder.exists() or not run_folder.is_dir():
@@ -1037,43 +1040,43 @@ def resume(
             typer.secho(f"Error: {message}", err=True, fg=typer.colors.RED)
         raise typer.Exit(1)
 
-    router = ModelRouter(run_id=run_id, run_folder=run_folder, config=config)
-    saver = SqliteSaver.from_conn_string(str(checkpoints_db))
-    compiled = build_jury_graph().compile(checkpointer=saver)
-    thread_config = {"configurable": {"thread_id": run_id, "router": router, "strict_confidence": strict_confidence, "auto_approve": auto_approve}}
+    from cjs.escalation.confidence_gate import LowConfidenceError
+    from cjs.escalation.human_review import HumanReviewRejectedError
+    from cjs.observability.langsmith import invoke_with_tracing, write_langsmith_url
 
+    router = ModelRouter(run_id=run_id, run_folder=run_folder, config=config)
     if not json_output:
         typer.echo(f"Resuming run {run_id}...")
 
-    from cjs.escalation.human_review import HumanReviewRejectedError
-    from cjs.escalation.confidence_gate import LowConfidenceError
-    from cjs.observability.langsmith import invoke_with_tracing, write_langsmith_url
-    try:
-        final_state, langsmith_url = invoke_with_tracing(
-            compiled, None, thread_config, run_id, 0
-        )
-    except HumanReviewRejectedError:
-        if json_output:
-            output_result({"ok": False, "status": "paused", "run_id": run_id,
-                           "reason": "human_review_rejected"}, json_mode=True)
-        else:
-            typer.secho(
-                f"Run paused at human review gate. Resume again with: cjs resume {run_id}",
-                fg=typer.colors.YELLOW,
+    with SqliteSaver.from_conn_string(str(checkpoints_db)) as saver:
+        compiled = build_jury_graph().compile(checkpointer=saver)
+        thread_config = {"configurable": {"thread_id": run_id, "router": router, "strict_confidence": strict_confidence, "auto_approve": auto_approve}}
+        try:
+            final_state, langsmith_url = invoke_with_tracing(
+                compiled, None, thread_config, run_id, 0
             )
-        raise typer.Exit(0)
-    except LowConfidenceError as exc:
-        if json_output:
-            output_result({"ok": False, "error": str(exc), "run_id": run_id}, json_mode=True)
-        else:
-            typer.secho(str(exc), err=True, fg=typer.colors.RED)
-        raise typer.Exit(1)
-    except Exception as exc:
-        if json_output:
-            output_result({"ok": False, "error": str(exc), "run_id": run_id}, json_mode=True)
-        else:
-            typer.secho(f"Resume failed: {exc}", err=True, fg=typer.colors.RED)
-        raise typer.Exit(1)
+        except HumanReviewRejectedError:
+            if json_output:
+                output_result({"ok": False, "status": "paused", "run_id": run_id,
+                               "reason": "human_review_rejected"}, json_mode=True)
+            else:
+                typer.secho(
+                    f"Run paused at human review gate. Resume again with: cjs resume {run_id}",
+                    fg=typer.colors.YELLOW,
+                )
+            raise typer.Exit(0)
+        except LowConfidenceError as exc:
+            if json_output:
+                output_result({"ok": False, "error": str(exc), "run_id": run_id}, json_mode=True)
+            else:
+                typer.secho(str(exc), err=True, fg=typer.colors.RED)
+            raise typer.Exit(1)
+        except Exception as exc:
+            if json_output:
+                output_result({"ok": False, "error": str(exc), "run_id": run_id}, json_mode=True)
+            else:
+                typer.secho(f"Resume failed: {exc}", err=True, fg=typer.colors.RED)
+            raise typer.Exit(1)
 
     from cjs.auction.engine import run_auction
     auction_verdict = run_auction(final_state, run_folder) if final_state else {}
@@ -1081,6 +1084,7 @@ def resume(
     report_path = None
     if final_state and auction_verdict:
         import webbrowser
+
         from cjs.report.builder import build_report
 
         metrics_path = run_folder / "results" / "metrics.json"

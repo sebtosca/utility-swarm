@@ -1,10 +1,14 @@
 import json
+from typing import Any
 from unittest.mock import MagicMock
 
+from langchain_core.runnables import RunnableConfig
+
 from cjs.graph.nodes.deliberation import deliberation_round_node
+from cjs.graph.state import JuryState
 from cjs.router.model_router import RouterResult
 
-JUDGEMENT = {
+JUDGEMENT: dict[str, Any] = {
     "agent_name": "creative_strategist", "agent_role": None,
     "video_path": "ad1.mp4", "scores": {"storytelling": 8.0},
     "strengths": [], "weaknesses": [], "evidence": [], "metric_comments": {},
@@ -26,7 +30,7 @@ CONSISTENCY_REPORT_WITH_FLAG = {
 ALL_AGENTS = ["creative_strategist", "brand_compliance", "audience_psychology",
               "performance_marketer", "storytelling_critic"]
 
-STATE = {
+STATE: JuryState = {
     "run_id": "test", "brief": {}, "rubric": {}, "brand_rules": {},
     "video_dossiers": [{"video_path": "/runs/test/input/videos/ad1.mp4", "duration_sec": 30.0,
                         "transcript": "", "hook_summary": "", "scenes": [], "pacing": "fast",
@@ -50,21 +54,21 @@ def make_mock_router(revised_judgement: dict | None = None) -> MagicMock:
 
 def test_deliberation_calls_all_five_agents():
     router = make_mock_router()
-    config = {"configurable": {"router": router}}
+    config: RunnableConfig = {"configurable": {"router": router}}
     deliberation_round_node(STATE, config)
     assert router.call_structured.call_count == 5
 
 
 def test_deliberation_returns_final_judgements_for_all_agents():
     router = make_mock_router()
-    config = {"configurable": {"router": router}}
+    config: RunnableConfig = {"configurable": {"router": router}}
     result = deliberation_round_node(STATE, config)
     assert set(result["final_judgements"].keys()) == set(ALL_AGENTS)
 
 
 def test_deliberation_flagged_agent_prompt_contains_flag():
     router = make_mock_router()
-    config = {"configurable": {"router": router}}
+    config: RunnableConfig = {"configurable": {"router": router}}
     deliberation_round_node(STATE, config)
     # brand_compliance was flagged — its call should include flag info
     calls = router.call_structured.call_args_list
@@ -75,7 +79,7 @@ def test_deliberation_flagged_agent_prompt_contains_flag():
 
 def test_deliberation_unflagged_agent_prompt_has_no_flags_section():
     router = make_mock_router()
-    config = {"configurable": {"router": router}}
+    config: RunnableConfig = {"configurable": {"router": router}}
     deliberation_round_node(STATE, config)
     calls = router.call_structured.call_args_list
     # creative_strategist is index 0, has no flags

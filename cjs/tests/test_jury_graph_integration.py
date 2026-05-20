@@ -4,12 +4,13 @@ Requires a live ANTHROPIC_API_KEY. Run with:
     pytest cjs/tests/test_jury_graph_integration.py -v -m integration
 """
 import tempfile
-import pytest
 from pathlib import Path
 
+import pytest
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from cjs.config import Settings, ModelSettings, AuthSettings, LimitSettings, RunSettings
+from cjs.config import AuthSettings, LimitSettings, ModelSettings, RunSettings, Settings
 from cjs.graph.jury_graph import build_jury_graph
 from cjs.graph.state import JuryState
 from cjs.router.model_router import ModelRouter
@@ -98,11 +99,11 @@ def test_full_jury_swarm_produces_verdict():
         }
 
         checkpoints_db = run_folder / "checkpoints.db"
-        saver = SqliteSaver.from_conn_string(str(checkpoints_db))
-        compiled = build_jury_graph().compile(checkpointer=saver)
-        thread_config = {"configurable": {"thread_id": run_id, "router": router}}
+        with SqliteSaver.from_conn_string(str(checkpoints_db)) as saver:
+            compiled = build_jury_graph().compile(checkpointer=saver)
+            thread_config: RunnableConfig = {"configurable": {"thread_id": run_id, "router": router}}
 
-        final_state = compiled.invoke(initial_state, config=thread_config)
+            final_state = compiled.invoke(initial_state, config=thread_config)  # type: ignore[arg-type]
 
         assert len(final_state["initial_judgements"]) == 5
         assert final_state["consistency_report"] is not None

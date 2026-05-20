@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter, SpanExporter
 from opentelemetry.trace import Span, Tracer
 
 
@@ -19,6 +19,7 @@ def init_tracer(run_id: str, service_name: str = "creative-jury-swarm") -> Trace
     provider = TracerProvider(resource=resource)
 
     endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT")
+    exporter: SpanExporter
     if endpoint:
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 

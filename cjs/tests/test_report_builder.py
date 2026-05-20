@@ -1,11 +1,10 @@
 import json
-from pathlib import Path
+from typing import cast
 
-import pytest
-
+from cjs.graph.state import JuryState
 from cjs.report.builder import build_report
 
-_STATE = {
+_STATE: JuryState = cast(JuryState, {
     "run_id": "test_run_001",
     "rubric": {"weights": {"storytelling": 0.6, "message_clarity": 0.4}, "name": "awareness"},
     "brief": {"brand": "TestBrand", "objective": "awareness"},
@@ -49,7 +48,7 @@ _STATE = {
         "ranking": ["ad1.mp4", "ad2.mp4"], "per_video_notes": {"ad1.mp4": "Strong."},
         "confidence": 0.87, "flags_resolved": [],
     },
-}
+})
 
 _VERDICT = {
     "winner_video": "ad1.mp4", "winner_rationale": "Strongest narrative.",
