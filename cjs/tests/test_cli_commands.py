@@ -18,6 +18,15 @@ def _plain(text: str) -> str:
     return _ANSI.sub("", text)
 
 
+def _combined_output(result) -> str:
+    """Return user-facing CLI output across Click versions with different stderr capture."""
+    try:
+        stderr = result.stderr
+    except (AttributeError, ValueError):
+        stderr = ""
+    return result.stdout + stderr
+
+
 # Verify `cjs config get models.text` returns the configured text model.
 def test_config_get_models_text(monkeypatch) -> None:
     config = Settings(models=ModelSettings(text="test-model", vision="vision-model"))
@@ -705,7 +714,7 @@ def test_config_get_unknown_key(monkeypatch) -> None:
     result = runner.invoke(app, ["config", "get", "unknown.key"])
 
     assert result.exit_code != 0
-    assert "Unknown config key: unknown.key" in result.stdout
+    assert "Unknown config key: unknown.key" in _combined_output(result)
 
 
 # Verify `--json config get` returns machine-readable error payload for unknown keys.
