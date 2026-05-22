@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -180,3 +181,60 @@ def test_websocket_receives_done_event(tmp_path):
 
     assert event["type"] == "done"
     assert event["winner"] == "ad1.mp4"
+
+
+# ── 11. Control endpoint ──────────────────────────────────────────────────────
+
+def test_control_unknown_run_pause(tmp_path):
+    from cjs.ui.app import create_app
+
+    app = create_app(config_override=_make_config(tmp_path))
+    with TestClient(app) as client:
+        resp = client.post("/api/runs/ghost/control", json={"action": "pause"})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "paused"
+
+
+def test_control_pause_clears_event(tmp_path):
+    from cjs.ui.app import create_app
+
+    app = create_app(config_override=_make_config(tmp_path))
+    with TestClient(app) as client:
+        evt = threading.Event()
+        evt.set()
+        app.state.pause_events["run1"] = evt
+
+        resp = client.post("/api/runs/run1/control", json={"action": "pause"})
+    assert resp.status_code == 200
+    assert not evt.is_set()
+
+
+def test_control_resume_sets_event(tmp_path):
+    from cjs.ui.app import create_app
+
+    app = create_app(config_override=_make_config(tmp_path))
+    with TestClient(app) as client:
+        evt = threading.Event()
+        app.state.pause_events["run1"] = evt
+
+        resp = client.post("/api/runs/run1/control", json={"action": "resume"})
+    assert resp.status_code == 200
+    assert evt.is_set()
+
+
+def test_control_unknown_action(tmp_path):
+    from cjs.ui.app import create_app
+
+    app = create_app(config_override=_make_config(tmp_path))
+    with TestClient(app) as client:
+        resp = client.post("/api/runs/run1/control", json={"action": "teleport"})
+    assert resp.status_code == 400
+
+
+def test_control_undo_no_ref_returns_404(tmp_path):
+    from cjs.ui.app import create_app
+
+    app = create_app(config_override=_make_config(tmp_path))
+    with TestClient(app) as client:
+        resp = client.post("/api/runs/ghost/control", json={"action": "undo"})
+    assert resp.status_code == 404

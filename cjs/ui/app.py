@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -42,8 +43,63 @@ def _safe_update(update: Any) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Background jury thread
+# Background jury thread helpers
 # ---------------------------------------------------------------------------
+
+def _stream_graph(
+    app: FastAPI,
+    run_id: str,
+    compiled: Any,
+    thread_config: Any,
+    run_folder: Path,
+) -> None:
+    """Stream jury graph from current checkpoint; emit WebSocket events. Runs in thread."""
+    from cjs.auction.engine import run_auction  # noqa: PLC0415
+    from cjs.report.builder import build_report  # noqa: PLC0415
+    from cjs.ui.events import structured_error  # noqa: PLC0415
+
+    pause_event = threading.Event()
+    stop_event = threading.Event()
+    pause_event.set()  # starts running
+
+    app.state.pause_events[run_id] = pause_event
+    app.state.stop_events[run_id] = stop_event
+
+    try:
+        for chunk in compiled.stream({}, thread_config):
+            if stop_event.is_set():
+                break
+            pause_event.wait()
+            if stop_event.is_set():
+                break
+            for node_name, update in chunk.items():
+                _put_event(app, run_id, {
+                    "type": "node_complete",
+                    "node": node_name,
+                    "update": _safe_update(update),
+                })
+
+        if stop_event.is_set():
+            return
+
+        snap = compiled.get_state(thread_config)
+        final_state = snap.values
+
+        _put_event(app, run_id, {"type": "node_start", "node": "auction"})
+        verdict = run_auction(final_state, run_folder)
+        build_report(run_folder, final_state, verdict, {})
+        _put_event(app, run_id, {
+            "type": "done",
+            "winner": verdict["winner_video"],
+            "report_url": f"/api/runs/{run_id}/report",
+        })
+
+    except Exception as exc:
+        _put_event(app, run_id, structured_error(exc))
+    finally:
+        app.state.pause_events.pop(run_id, None)
+        app.state.stop_events.pop(run_id, None)
+
 
 def _jury_thread(
     app: FastAPI,
@@ -56,25 +112,29 @@ def _jury_thread(
 ) -> None:
     """Run the full jury pipeline in a ThreadPoolExecutor; emit WebSocket events."""
     try:
-        from langgraph.checkpoint.sqlite import SqliteSaver
+        import sqlite3  # noqa: PLC0415
 
-        from cjs.auction.engine import run_auction
-        from cjs.escalation.confidence_gate import LowConfidenceError  # noqa: F401
-        from cjs.escalation.human_review import HumanReviewRejectedError  # noqa: F401
-        from cjs.graph.jury_graph import build_jury_graph
-        from cjs.graph.state import JuryState
-        from cjs.pipelines.brief_ingest import (
+        from langchain_core.runnables import RunnableConfig  # noqa: PLC0415
+        from langgraph.checkpoint.sqlite import SqliteSaver  # noqa: PLC0415
+
+        from cjs.graph.jury_graph import build_jury_graph  # noqa: PLC0415
+        from cjs.graph.state import JuryState  # noqa: PLC0415
+        from cjs.pipelines.brief_ingest import (  # noqa: PLC0415
             extract_brief_raw,
             generate_rubric,
             load_brand_rules_from_yaml,
             parse_brief,
         )
-        from cjs.pipelines.video_analysis import analyze_video
-        from cjs.report.builder import build_report
-        from cjs.router.model_router import ModelRouter
-        from cjs.schemas.brand_rules import BrandRules
+        from cjs.pipelines.video_analysis import analyze_video  # noqa: PLC0415
+        from cjs.router.model_router import ModelRouter  # noqa: PLC0415
+        from cjs.schemas.brand_rules import BrandRules  # noqa: PLC0415
 
-        router = ModelRouter(run_id=run_id, run_folder=run_folder, config=config)
+        router = ModelRouter(
+            run_id=run_id,
+            run_folder=run_folder,
+            config=config,
+            emit=lambda e: _put_event(app, run_id, e),
+        )
         _put_event(app, run_id, {"type": "jury_started", "run_id": run_id})
 
         # --- Brief ingestion ---
@@ -112,7 +172,7 @@ def _jury_thread(
                 "duration_sec": dossier.duration_sec,
             })
 
-        # --- Jury graph (stream mode for live events) ---
+        # --- Build and compile graph ---
         initial_state: JuryState = {
             "run_id": run_id,
             "brief": parsed_brief.model_dump(),
@@ -125,41 +185,26 @@ def _jury_thread(
             "verdict": None,
         }
         checkpoints_db = run_folder / "checkpoints.db"
-        with SqliteSaver.from_conn_string(str(checkpoints_db)) as saver:
-            from langchain_core.runnables import RunnableConfig
-            compiled = build_jury_graph().compile(checkpointer=saver)
-            thread_config: RunnableConfig = {
-                "configurable": {
-                    "thread_id": run_id,
-                    "router": router,
-                    "strict_confidence": False,
-                    "auto_approve": True,
-                }
+        conn = sqlite3.connect(str(checkpoints_db), check_same_thread=False)
+        saver = SqliteSaver(conn=conn)
+        compiled = build_jury_graph().compile(checkpointer=saver)
+        thread_config: RunnableConfig = {
+            "configurable": {
+                "thread_id": run_id,
+                "router": router,
+                "strict_confidence": False,
+                "auto_approve": True,
             }
+        }
 
-            for chunk in compiled.stream(initial_state, thread_config):  # type: ignore[arg-type]
-                for node_name, update in chunk.items():
-                    _put_event(app, run_id, {
-                        "type": "node_complete",
-                        "node": node_name,
-                        "update": _safe_update(update),
-                    })
+        compiled.update_state(thread_config, initial_state)
+        app.state.compiled_refs[run_id] = (compiled, thread_config, run_folder, config)
 
-            snap = compiled.get_state(thread_config)  # type: ignore[arg-type]
-            final_state: JuryState = snap.values  # type: ignore[assignment]
-
-        # --- Auction + report ---
-        _put_event(app, run_id, {"type": "node_start", "node": "auction"})
-        verdict = run_auction(final_state, run_folder)
-        build_report(run_folder, final_state, verdict, {})
-        _put_event(app, run_id, {
-            "type": "done",
-            "winner": verdict["winner_video"],
-            "report_url": f"/api/runs/{run_id}/report",
-        })
+        _stream_graph(app, run_id, compiled, thread_config, run_folder)
 
     except Exception as exc:
-        _put_event(app, run_id, {"type": "error", "message": str(exc)})
+        from cjs.ui.events import structured_error as _se  # noqa: PLC0415
+        _put_event(app, run_id, _se(exc))
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +231,9 @@ def create_app(config_override: Settings | None = None) -> FastAPI:
         app.state.queues = {}
         app.state.executor = ThreadPoolExecutor(max_workers=4)
         app.state.loop = asyncio.get_event_loop()
+        app.state.pause_events = {}
+        app.state.stop_events = {}
+        app.state.compiled_refs = {}
         yield
         app.state.executor.shutdown(wait=False)
 
@@ -229,6 +277,63 @@ def create_app(config_override: Settings | None = None) -> FastAPI:
         if not report_path.exists():
             raise HTTPException(status_code=404, detail=f"No report for run: {run_id}")
         return FileResponse(str(report_path), media_type="text/html")
+
+    @app.post("/api/runs/{run_id}/control")
+    async def control_run(run_id: str, body: dict) -> dict:
+        action = body.get("action")
+
+        if action == "pause":
+            evt = app.state.pause_events.get(run_id)
+            if evt:
+                evt.clear()
+            return {"status": "paused"}
+
+        if action == "resume":
+            evt = app.state.pause_events.get(run_id)
+            if evt:
+                evt.set()
+            return {"status": "resumed"}
+
+        if action == "undo":
+            stop_evt = app.state.stop_events.get(run_id)
+            if stop_evt:
+                stop_evt.set()
+            await asyncio.sleep(0.25)
+
+            ref = app.state.compiled_refs.get(run_id)
+            if not ref:
+                raise HTTPException(status_code=404, detail="No active run to undo")
+
+            compiled, thread_config, ref_run_folder, ref_config = ref
+
+            try:
+                history = list(compiled.get_state_history(thread_config))
+            except Exception as exc:
+                raise HTTPException(status_code=500, detail=f"Checkpoint error: {exc}") from exc
+
+            if len(history) < 2:
+                raise HTTPException(status_code=400, detail="Nothing to undo")
+
+            prior = history[1]
+            compiled.update_state(thread_config, prior.values)
+
+            rewound_to = prior.next[0] if prior.next else "start"
+            _put_event(app, run_id, {"type": "run_rewound", "to_node": rewound_to})
+
+            from cjs.router.model_router import ModelRouter  # noqa: PLC0415
+            new_router = ModelRouter(
+                run_id=run_id,
+                run_folder=ref_run_folder,
+                config=ref_config,
+                emit=lambda e: _put_event(app, run_id, e),
+            )
+            thread_config["configurable"]["router"] = new_router
+            app.state.executor.submit(
+                _stream_graph, app, run_id, compiled, thread_config, ref_run_folder
+            )
+            return {"status": "rewound", "to_node": rewound_to}
+
+        raise HTTPException(status_code=400, detail=f"Unknown action: {action!r}")
 
     @app.post("/api/run", status_code=202)
     async def start_run(

@@ -276,3 +276,55 @@ def test_call_with_retry_reraises_after_max_attempts(tmp_path):
                 system="s", user="u", model="claude-sonnet-4-6",
                 extra_content=[], thinking=False,
             )
+
+
+# ── emit callback ──────────────────────────────────────────────────────────────
+
+def test_emit_called_with_start_and_complete(tmp_path):
+    emitted: list[dict] = []
+    router = ModelRouter(
+        run_id="test_run", run_folder=tmp_path,
+        config=Settings(), emit=emitted.append,
+    )
+    fake_result = RouterResult(
+        content="hello", tokens_in=10, tokens_out=5, latency_ms=0.0, model="claude-sonnet-4-6"
+    )
+    with patch.object(router, "_call_with_retry", return_value=fake_result):
+        router.call_text(system="s", user="u", node="test_node", agent="test_agent")
+
+    types = [e["type"] for e in emitted]
+    assert types == ["llm_call_start", "llm_call_complete"]
+    assert emitted[0]["node"] == "test_node"
+    assert emitted[0]["agent"] == "test_agent"
+    assert emitted[1]["tokens_in"] == 10
+    assert emitted[1]["latency_ms"] >= 0
+
+
+def test_emit_not_required(tmp_path):
+    router = ModelRouter(run_id="test_run", run_folder=tmp_path, config=Settings())
+    fake_result = RouterResult(
+        content="ok", tokens_in=5, tokens_out=2, latency_ms=0.0, model="claude-sonnet-4-6"
+    )
+    with patch.object(router, "_call_with_retry", return_value=fake_result):
+        result = router.call_text(system="s", user="u", node="n")
+    assert result.content == "ok"
+
+
+def test_emit_receives_thinking_on_extended_call(tmp_path):
+    emitted: list[dict] = []
+    router = ModelRouter(
+        run_id="test_run", run_folder=tmp_path,
+        config=Settings(), emit=emitted.append,
+    )
+    with patch.object(
+        router, "_call_with_retry",
+        return_value=RouterResult(
+            content="verdict", tokens_in=500, tokens_out=100,
+            latency_ms=0.0, model="claude-opus-4-7",
+            thinking="Step 1: review scores",
+        ),
+    ):
+        router.call_extended_thinking(system="s", user="u", node="moderator_node")
+
+    complete = next(e for e in emitted if e["type"] == "llm_call_complete")
+    assert complete["thinking"] == "Step 1: review scores"

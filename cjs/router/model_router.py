@@ -3,6 +3,7 @@ import json
 import os
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -36,6 +37,7 @@ class ModelRouter:
         run_folder: Path,
         config: Settings,
         audit: AuditLogger | None = None,
+        emit: Callable[[dict], None] | None = None,
     ) -> None:
         self.run_id = run_id
         self._run_folder = run_folder
@@ -46,6 +48,7 @@ class ModelRouter:
         )
         self._failures: dict[str, int] = {}
         self._lock = threading.Lock()
+        self._emit: Callable[[dict], None] = emit or (lambda _e: None)
 
     # --- public call surface ---
 
@@ -153,6 +156,14 @@ class ModelRouter:
         prompt = f"{system}\n\n{user}"
         t0 = time.perf_counter()
 
+        self._emit({
+            "type": "llm_call_start",
+            "ts": time.time(),
+            "node": node,
+            "agent": agent,
+            "model": model,
+        })
+
         try:
             result = self._call_with_retry(
                 system=system,
@@ -203,6 +214,18 @@ class ModelRouter:
 
         if model != preferred:
             self._write_escalation(node=node, from_model=preferred, to_model=model)
+
+        self._emit({
+            "type": "llm_call_complete",
+            "ts": time.time(),
+            "node": node,
+            "agent": agent,
+            "model": result.model,
+            "tokens_in": result.tokens_in,
+            "tokens_out": result.tokens_out,
+            "latency_ms": round(latency_ms, 1),
+            "thinking": result.thinking,
+        })
 
         return result
 

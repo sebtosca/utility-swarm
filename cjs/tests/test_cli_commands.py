@@ -7,7 +7,7 @@ from typer.testing import CliRunner
 from cjs.cli import app
 from cjs.config import ConfigError, ModelSettings, Settings
 
-runner = CliRunner()
+runner = CliRunner(env={"NO_COLOR": "1"})
 
 
 # Verify `cjs config get models.text` returns the configured text model.
