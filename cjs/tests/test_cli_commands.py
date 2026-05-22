@@ -8,8 +8,7 @@ from typer.testing import CliRunner
 from cjs.cli import app
 from cjs.config import ConfigError, ModelSettings, Settings
 
-# mix_stderr=True: newer Typer/Click defaults to False, which hides err=True messages from stdout.
-runner = CliRunner(env={"NO_COLOR": "1"}, mix_stderr=True)
+runner = CliRunner(env={"NO_COLOR": "1"})
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*[mGKH]")
 
