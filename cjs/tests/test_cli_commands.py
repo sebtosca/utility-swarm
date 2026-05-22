@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -7,7 +8,15 @@ from typer.testing import CliRunner
 from cjs.cli import app
 from cjs.config import ConfigError, ModelSettings, Settings
 
-runner = CliRunner(env={"NO_COLOR": "1"})
+# mix_stderr=True: newer Typer/Click defaults to False, which hides err=True messages from stdout.
+runner = CliRunner(env={"NO_COLOR": "1"}, mix_stderr=True)
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*[mGKH]")
+
+
+def _plain(text: str) -> str:
+    """Strip ANSI escape codes. Newer Rich emits bold codes even with NO_COLOR."""
+    return _ANSI.sub("", text)
 
 
 # Verify `cjs config get models.text` returns the configured text model.
@@ -539,8 +548,9 @@ def test_run_help_lists_expected_options() -> None:
     result = runner.invoke(app, ["run", "--help"])
 
     assert result.exit_code == 0
+    stdout = _plain(result.stdout)
     for option in ("--brief", "--videos", "--brand", "--out"):
-        assert option in result.stdout
+        assert option in stdout
 
 
 # Verify configure help includes expected non-interactive and override options.
@@ -548,6 +558,7 @@ def test_configure_help_lists_expected_options() -> None:
     result = runner.invoke(app, ["configure", "--help"])
 
     assert result.exit_code == 0
+    stdout = _plain(result.stdout)
     for option in (
         "--non-interactive",
         "--provider",
@@ -559,7 +570,7 @@ def test_configure_help_lists_expected_options() -> None:
         "--max-duration-sec",
         "--max-frames",
     ):
-        assert option in result.stdout
+        assert option in stdout
 
 
 # Verify help output remains standard CLI help even when --json is set globally.
@@ -567,8 +578,9 @@ def test_configure_help_with_json_still_shows_help_text() -> None:
     result = runner.invoke(app, ["--json", "configure", "--help"])
 
     assert result.exit_code == 0
-    assert "One-time setup: choose provider, models, and limits" in result.stdout
-    assert "--provider" in result.stdout
+    stdout = _plain(result.stdout)
+    assert "One-time setup: choose provider, models, and limits" in stdout
+    assert "--provider" in stdout
 
 
 # Verify `doctor --json` emits checks including python_version status.
