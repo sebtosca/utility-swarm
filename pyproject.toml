@@ -29,6 +29,8 @@ dependencies = [
 
 [project.scripts]
 cjs = "cjs.cli:app"
+creative-jury = "cjs.cli:app"
+creative-jury-swarm = "cjs.cli:app"
 
 [tool.setuptools.packages.find]
 include = ["cjs*"]

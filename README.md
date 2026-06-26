@@ -88,20 +88,31 @@ source .venv/bin/activate
 pip install -e .
 ```
 
+`pip install -e .` is the app install command. The `requirements.txt` file is only for lightweight test tooling.
+
 You also need `ffmpeg` on your `PATH` for video processing.
 
 ### 2. Configure once
 
+Put your Anthropic key in a local `.env` file:
+
 ```bash
-export ANTHROPIC_API_KEY=<your-key>
-cjs configure
-cjs doctor
+ANTHROPIC_API_KEY=<your-key>
 ```
 
-For a non-interactive setup:
+Then configure and check the app:
 
 ```bash
-cjs configure --non-interactive --provider anthropic --out-dir ./runs
+creative-jury configure --non-interactive --provider anthropic --out-dir ./runs
+creative-jury doctor
+```
+
+The CLI automatically loads `.env` from the directory where you run the command. Shell environment variables still win if the same key is set in both places.
+
+`creative-jury` and `creative-jury-swarm` are the recommended commands. A shorter `cjs` alias is also installed, but on some systems another program already uses that name. If a command behaves like it is opening a file named `doctor` or `ui`, use:
+
+```bash
+python -m cjs.cli doctor
 ```
 
 ### Approach 1: Easy UI
@@ -109,7 +120,7 @@ cjs configure --non-interactive --provider anthropic --out-dir ./runs
 Best for non-technical users, client reviews, and anyone who wants to upload files from a browser.
 
 ```bash
-cjs ui
+creative-jury ui
 ```
 
 Then open `http://127.0.0.1:8000` if the browser does not open automatically.
@@ -131,7 +142,7 @@ Best for developers, repeatable evaluations, CI jobs, and anyone who wants exact
 Create or review a brand file:
 
 ```bash
-cjs brand init --brief brief.pdf --out brand.yaml
+creative-jury brand init --brief brief.pdf --out brand.yaml
 ```
 
 Review the generated YAML before using it in a run.
@@ -139,15 +150,15 @@ Review the generated YAML before using it in a run.
 Run the jury:
 
 ```bash
-cjs run --brief brief.pdf --videos ad1.mp4 --videos ad2.mp4 --brand brand.yaml
+creative-jury run --brief brief.pdf --videos ad1.mp4 --videos ad2.mp4 --brand brand.yaml
 ```
 
 Useful terminal options:
 
 ```bash
-cjs run --brief brief.pdf --videos ad1.mp4 --videos ad2.mp4 --brand brand.yaml --auto-approve
-cjs run --brief brief.pdf --videos ad1.mp4 --videos ad2.mp4 --brand brand.yaml --strict-confidence
-cjs --json run --brief brief.pdf --videos ad1.mp4 --videos ad2.mp4 --brand brand.yaml
+creative-jury run --brief brief.pdf --videos ad1.mp4 --videos ad2.mp4 --brand brand.yaml --auto-approve
+creative-jury run --brief brief.pdf --videos ad1.mp4 --videos ad2.mp4 --brand brand.yaml --strict-confidence
+creative-jury --json run --brief brief.pdf --videos ad1.mp4 --videos ad2.mp4 --brand brand.yaml
 ```
 
 The run writes artifacts to `runs/<run_id>/` and opens the report when complete.
@@ -183,23 +194,23 @@ Jaeger is available at `http://localhost:16686`.
 
 | Command | Description |
 |---|---|
-| `cjs configure` | Create or update `~/.cjs/config.yaml` |
-| `cjs doctor` | Check Python, ffmpeg, Whisper, config, API key, and run directory |
-| `cjs brand init --brief brief.pdf` | Generate a starter brand YAML |
-| `cjs run --brief ... --videos ... --brand ...` | Run the full jury pipeline |
-| `cjs resume <run_id>` | Resume from the last LangGraph checkpoint |
-| `cjs ui` | Launch the live jury room web UI |
-| `cjs runs` | List previous run IDs |
-| `cjs report <run_id>` | Print the report path for a run |
-| `cjs audit <run_id>` | Show the LLM audit trail as a Rich table |
-| `cjs models` | Show configured text and vision models |
-| `cjs config get [key]` | Read all config or a dot-path value |
-| `cjs config set <key> <value>` | Update a dot-path config value |
+| `creative-jury configure` | Create or update `~/.cjs/config.yaml` |
+| `creative-jury doctor` | Check Python, ffmpeg, Whisper, config, API key, and run directory |
+| `creative-jury brand init --brief brief.pdf` | Generate a starter brand YAML |
+| `creative-jury run --brief ... --videos ... --brand ...` | Run the full jury pipeline |
+| `creative-jury resume <run_id>` | Resume from the last LangGraph checkpoint |
+| `creative-jury ui` | Launch the live jury room web UI |
+| `creative-jury runs` | List previous run IDs |
+| `creative-jury report <run_id>` | Print the report path for a run |
+| `creative-jury audit <run_id>` | Show the LLM audit trail as a Rich table |
+| `creative-jury models` | Show configured text and vision models |
+| `creative-jury config get [key]` | Read all config or a dot-path value |
+| `creative-jury config set <key> <value>` | Update a dot-path config value |
 
 Most commands support machine-readable output through the root `--json` flag:
 
 ```bash
-cjs --json runs
+creative-jury --json runs
 ```
 
 ---
@@ -288,11 +299,11 @@ The report is self-contained and can be opened without an internet connection.
 ## Observability and auditability
 
 ```text
-cjs run
+creative-jury run
   ├─ OTel spans -> OTLP gRPC -> Jaeger
   ├─ optional LangSmith traces -> results/metrics.json
   ├─ structlog JSON -> stdout or log aggregator
-  └─ audit.jsonl -> cjs audit <run_id>
+  └─ audit.jsonl -> creative-jury audit <run_id>
 ```
 
 Each LLM audit entry records model, node, agent, token counts, latency, error state, and a SHA-256 prompt hash. Raw prompt text is not stored in the audit log.

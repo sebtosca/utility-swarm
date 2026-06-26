@@ -34,6 +34,39 @@ app.add_typer(config_app, name="config")
 app.add_typer(brand_app, name="brand")
 
 
+def load_project_dotenv(path: Path | None = None) -> Path | None:
+    """Load simple KEY=VALUE pairs from a local .env file without overriding the shell."""
+    env_path = path or Path.cwd() / ".env"
+    if not env_path.exists():
+        return None
+
+    try:
+        lines = env_path.read_text().splitlines()
+    except OSError:
+        return None
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("export "):
+            stripped = stripped[len("export ") :].strip()
+        if "=" not in stripped:
+            continue
+
+        key, value = stripped.split("=", 1)
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+        os.environ[key] = value
+
+    return env_path
+
+
 # Output helper for plain and JSON modes.
 def output_result(data: object, json_mode: bool) -> None:
     if json_mode:
@@ -185,7 +218,8 @@ def main(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose logs"),
     json_mode: bool = typer.Option(False, "--json", help="Output machine-readable JSON."),
 ) -> None:
-    """Creative Jury Swarm CLI. Run `cjs configure` once, then `cjs run --brief ... --videos ...`."""
+    """Creative Jury Swarm CLI. Run `creative-jury configure` once, then `creative-jury run --brief ... --videos ...`."""
+    load_project_dotenv()
     ctx.obj = {"verbose": verbose, "json_mode": json_mode}
 
     if ctx.invoked_subcommand is None:
@@ -459,8 +493,10 @@ def configure(
 
     typer.echo("\nNext steps:")
     typer.echo(f"  1. Set your API key: export {config.auth.api_key_env}=<your-key>")
-    typer.echo("  2. Run the jury: cjs run --brief path/to/brief.pdf --videos ad1.mp4 ad2.mp4")
-    typer.echo("  3. Check env: cjs doctor")
+    typer.echo(
+        "  2. Run the jury: creative-jury run --brief path/to/brief.pdf --videos ad1.mp4 ad2.mp4"
+    )
+    typer.echo("  3. Check env: creative-jury doctor")
 
 
 # Show configured text and vision model names.

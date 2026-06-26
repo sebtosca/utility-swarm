@@ -5,7 +5,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from cjs.cli import app
+from cjs.cli import app, load_project_dotenv
 from cjs.config import ConfigError, ModelSettings, Settings
 
 runner = CliRunner(env={"NO_COLOR": "1"})
@@ -25,6 +25,32 @@ def _combined_output(result) -> str:
     except (AttributeError, ValueError):
         stderr = ""
     return result.stdout + stderr
+
+
+def test_load_project_dotenv_reads_local_env_without_overriding_shell(
+    monkeypatch, tmp_path: Path
+) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "# local secrets",
+                "ANTHROPIC_API_KEY=from-file",
+                "export LANGCHAIN_PROJECT='creative-jury-swarm'",
+                "EXISTING_VALUE=from-file",
+            ]
+        )
+    )
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("LANGCHAIN_PROJECT", raising=False)
+    monkeypatch.setenv("EXISTING_VALUE", "from-shell")
+
+    loaded_path = load_project_dotenv(env_file)
+
+    assert loaded_path == env_file
+    assert os.environ["ANTHROPIC_API_KEY"] == "from-file"
+    assert os.environ["LANGCHAIN_PROJECT"] == "creative-jury-swarm"
+    assert os.environ["EXISTING_VALUE"] == "from-shell"
 
 
 # Verify `cjs config get models.text` returns the configured text model.
